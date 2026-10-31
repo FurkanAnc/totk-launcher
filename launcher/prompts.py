@@ -25,11 +25,11 @@ from pathlib import Path
 
 from i18n import t
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent
+from paths import APP, ROOT
+
 MODS = ROOT / "romfs_mods"
 PATCHES = ROOT / "romfs-patches"
-RT = HERE / "rt"
+RT = APP / "rt"
 OUT = RT / "mods"
 OUT_PATCHES = RT / "patches"
 STAMP = RT / "overlay.sig"
@@ -602,9 +602,10 @@ def _save_font(font) -> bytes:
 def build_keyboard_font(binds: dict[str, dict], original_otf: bytes, label_otf: bytes) -> bytes:
     from fontTools.pens.t2CharStringPen import T2CharStringPen
     from fontTools.ttLib import TTFont
-    font = TTFont(io.BytesIO(original_otf))
+    font = TTFont(io.BytesIO(original_otf), recalcTimestamp=False)
     cmap = font.getBestCmap()
-    painter = Painter(TTFont(io.BytesIO(label_otf)), TTFont(io.BytesIO(original_otf)))
+    painter = Painter(TTFont(io.BytesIO(label_otf), recalcTimestamp=False),
+                      TTFont(io.BytesIO(original_otf), recalcTimestamp=False))
     top = font["CFF "].cff.topDictIndex[0]
     margin = 40
     for code, spec in glyph_specs(binds).items():
@@ -624,7 +625,8 @@ def build_mod_font(original_otf: bytes, mod_otf: bytes) -> bytes:
     from fontTools.pens.recordingPen import RecordingPen
     from fontTools.pens.t2CharStringPen import T2CharStringPen
     from fontTools.ttLib import TTFont
-    font, mod = TTFont(io.BytesIO(original_otf)), TTFont(io.BytesIO(mod_otf))
+    font = TTFont(io.BytesIO(original_otf), recalcTimestamp=False)
+    mod = TTFont(io.BytesIO(mod_otf), recalcTimestamp=False)
     cmap, mcm, mgs = font.getBestCmap(), mod.getBestCmap(), mod.getGlyphSet()
     top = font["CFF "].cff.topDictIndex[0]
     for code in range(0xE040, 0xE0A0):
@@ -720,7 +722,8 @@ def symbol_with_glyphs(symbol_otf: bytes, external_otf: bytes, codes) -> bytes:
     from fontTools.pens.t2CharStringPen import T2CharStringPen
     from fontTools.pens.transformPen import TransformPen
     from fontTools.ttLib import TTFont
-    sym, ext = TTFont(io.BytesIO(symbol_otf)), TTFont(io.BytesIO(external_otf))
+    sym = TTFont(io.BytesIO(symbol_otf), recalcTimestamp=False)
+    ext = TTFont(io.BytesIO(external_otf), recalcTimestamp=False)
     ecm, egs = ext.getBestCmap(), ext.getGlyphSet()
     used = set(sym.getBestCmap().values()) | {".notdef"}
     free = [g for g in reversed(sym.getGlyphOrder()) if g not in used and g.startswith("_")]

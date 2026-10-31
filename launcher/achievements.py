@@ -13,8 +13,9 @@ from pathlib import Path
 
 from i18n import t
 
-HERE = Path(__file__).resolve().parent
-DATA = HERE / "achievement_data.json"
+from paths import RES
+
+DATA = RES / "achievement_data.json"
 
 SAV_MAGIC = 0x01020304
 

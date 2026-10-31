@@ -1,5 +1,9 @@
 launcher/launcher.json
 launcher/ini-backups/
 launcher/rt/
+launcher/dist/
+launcher/build/
+launcher/selftest.txt
+launcher/ui-errors.log
 __pycache__/
 *.tmp

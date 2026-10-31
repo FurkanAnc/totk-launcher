@@ -1,3 +1,4 @@
 fonttools>=4.40
 zstandard>=0.21
 Pillow>=10.0
+pywebview>=5.0
