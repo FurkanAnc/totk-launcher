@@ -53,3 +53,7 @@ The first launch after a change takes about 10 seconds; later launches reuse the
 | `profile\launcher-backups\` | save backups |
 
 To uninstall, delete the `launcher` folder and `TotK Launcher.cmd`.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Not affiliated with Nintendo; The Legend of Zelda: Tears of the Kingdom is a trademark of Nintendo.
