@@ -12,6 +12,9 @@ A launcher for the Tears of the Kingdom PC recomp (`totk.exe`). English by defau
   `romfs_mods`.
 - **Saves**: automatic backup before every launch, manual backups, restore.
 - **Cheats**: rupees, hearts, stamina wheels and battery cells in a save slot (while the game is closed).
+- **Achievements**: 55 achievements in five categories (story, exploration, collection, combat, hero), read from
+  your saves after every session: temples, shrines, Lightroots, Korok seeds, caves, wells, bosses, Lynels, Flurry
+  Rushes, the Compendium and more. A popup shows new ones; saves from the prologue do not count.
 
 ## Install
 
@@ -47,12 +50,16 @@ The first launch after a change takes about 10 seconds; later launches reuse the
 
 | Path | What |
 |---|---|
-| `launcher\launcher.json` | launcher options |
+| `launcher\launcher.json` | launcher options and unlocked achievements |
 | `launcher\ini-backups\` | the last 10 copies of `totk.ini` |
 | `launcher\rt\` | the prompt overlays (safe to delete) |
 | `profile\launcher-backups\` | save backups |
 
 To uninstall, delete the `launcher` folder and `TotK Launcher.cmd`.
+
+## Credits
+
+The achievement flag lists (`launcher/achievement_data.json`) come from the [Zelda: Tears of the Kingdom savegame editor](https://github.com/marcrobledo/savegame-editors) by Marc Robledo, with research by MacSpazzy, Phil, savage13, Karlos007, Echocolat and MrCheeze. MIT License, Copyright (c) 2017-2023 Marc Robledo.
 
 ## License
 

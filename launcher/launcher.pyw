@@ -23,6 +23,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import i18n  # noqa: E402
 import prompts  # noqa: E402
+import achievements  # noqa: E402
 from i18n import t  # noqa: E402
 
 ROOT = HERE.parent
@@ -69,6 +70,7 @@ def load_config() -> dict:
     cfg.setdefault("backup_before_play", True)
     cfg.setdefault("backup_keep", 10)
     cfg.setdefault("close_on_play", False)
+    cfg.setdefault("achievements", {})
     cfg["prompts"] = {"klavye": "keyboard", "playstation": "mod"}.get(cfg.get("prompts"), cfg.get("prompts"))
     if cfg["prompts"] not in prompts.PROMPT_SETS:
         cfg["prompts"] = "keyboard"
@@ -268,7 +270,7 @@ def cheats():
         ("hearts", "PlayerStatus.MaxLife", T_INT, 4, 40, t("Hearts (maximum)", "Kalp (en çok)"),
          t("Health is filled up to it too.", "Can da bu değere doldurulur.")),
         ("stamina", "PlayerStatus.MaxStamina", T_FLOAT, 1000, 3, t("Stamina wheels", "Dayanıklılık çarkı"),
-         t("1 to 3 wheels.", "1-3 çark.")),
+         t("1 to 3 wheels, in fifths.", "1-3 çark, beşte bir adımlarla.")),
         ("battery", "PlayerStatus.MaxEnergy", T_FLOAT, 1000, 8, t("Zonai battery cells", "Zonai pil hücresi"),
          t("1 to 8 cells.", "1-8 hücre.")),
     ]
@@ -488,6 +490,7 @@ class App:
         self._build()
         self.show("home")
         self._poll()
+        self.check_achievements()
         self.root.bind_all("<KeyPress>", self._on_key)
         self.root.bind_all("<ButtonPress>", self._on_mouse)
 
@@ -517,7 +520,7 @@ class App:
         self.nav = {}
         for key, label in (("home", t("Home", "Ana sayfa")), ("settings", t("Settings", "Ayarlar")),
                            ("controls", t("Controls", "Kontroller")), ("saves", t("Saves", "Kayıtlar")),
-                           ("cheats", t("Cheats", "Hileler"))):
+                           ("achievements", t("Achievements", "Başarımlar")), ("cheats", t("Cheats", "Hileler"))):
             b = btn(side, "   " + label, lambda k=key: self.show(k), "side", anchor="w")
             b.pack(fill="x")
             self.nav[key] = b
@@ -563,7 +566,8 @@ class App:
             w.destroy()
         self.main.canvas.yview_moveto(0)
         {"home": self.page_home, "settings": self.page_settings, "controls": self.page_controls,
-         "saves": self.page_saves, "cheats": self.page_cheats}[page](self.main.body)
+         "saves": self.page_saves, "achievements": self.page_achievements,
+         "cheats": self.page_cheats}[page](self.main.body)
 
     def _title(self, p, title, sub=""):
         tk.Label(p, text=title, bg=BG, fg=TXT, font=("Segoe UI Black", 20), anchor="w").pack(
@@ -1142,6 +1146,129 @@ class App:
         self.binds = None
         self._rerender_controls()
 
+    # -- achievements
+    def check_achievements(self, announce=True):
+        """Reads the saves in the background; new unlocks are recorded and shown."""
+        def work():
+            unlocked = dict(self.cfg.get("achievements", {}))
+            first = not unlocked
+            try:
+                best, new = achievements.evaluate(SAVE, unlocked)
+            except Exception:  # noqa: BLE001 - a broken save must not stop the launcher
+                return
+            self.root.after(0, lambda: done(best, new, unlocked, first))
+
+        def done(best, new, unlocked, first):
+            self.ach_stats = best
+            if new:
+                self._cfg("achievements", unlocked)
+                if announce and first and len(new) > 1:
+                    # first look at existing progress: one summary instead of a popup per achievement
+                    self.toast(t(f"{len(new)} achievements unlocked from your saves",
+                                 f"Kayıtlarından {len(new)} başarım açıldı"))
+                elif announce:
+                    for i, aid in enumerate(new[:5]):
+                        self.root.after(i * 4200, lambda a=aid: self.unlock_popup(a))
+                    if len(new) > 5:
+                        self.root.after(5 * 4200, lambda: self.toast(
+                            t(f"+{len(new) - 5} more achievements", f"+{len(new) - 5} başarım daha")))
+            if self.page == "achievements":
+                self._rerender("achievements")
+        threading.Thread(target=work, daemon=True).start()
+
+    def unlock_popup(self, aid):
+        a = next(x for x in achievements.ACHIEVEMENTS if x[0] == aid)
+        box = tk.Frame(self.root, bg=PANEL, highlightbackground=ACCENT, highlightthickness=1)
+        tk.Label(box, text=a[2], bg=ACCENT, fg="#03140f", font=("Segoe UI Symbol", 18), width=2).pack(
+            side="left", fill="y", ipadx=8)
+        right = tk.Frame(box, bg=PANEL)
+        right.pack(side="left", padx=12, pady=8)
+        tk.Label(right, text=t("ACHIEVEMENT UNLOCKED", "BAŞARIM AÇILDI"), bg=PANEL, fg=ACCENT,
+                 font=("Segoe UI Semibold", 8), anchor="w").pack(fill="x")
+        tk.Label(right, text=t(*a[3]), bg=PANEL, fg=TXT, font=("Segoe UI Semibold", 11), anchor="w").pack(fill="x")
+        tk.Label(right, text=t(*a[4]), bg=PANEL, fg=DIM, font=("Segoe UI", 8), anchor="w").pack(fill="x")
+        box.place(relx=1.0, rely=1.0, anchor="se", x=-24, y=-24)
+        self.root.after(4000, box.destroy)
+
+    def page_achievements(self, p):
+        unlocked = self.cfg.get("achievements", {})
+        best = getattr(self, "ach_stats", None)
+        total = len(achievements.ACHIEVEMENTS)
+        self._title(p, t("Achievements", "Başarımlar"),
+                    t("Read from your save files after every game session. Saves made before reaching the Great Sky "
+                      "Island don't count; once unlocked, an achievement stays unlocked.",
+                      "Her oyun oturumundan sonra kayıt dosyalarından okunur. Gökyüzü Adası'na çıkmadan önceki "
+                      "kayıtlar sayılmaz; açılan başarım açık kalır."))
+
+        top = Card(p, t("PROGRESS", "İLERLEME"))
+        top.pack(fill="x", padx=28, pady=6)
+        row = tk.Frame(top, bg=PANEL)
+        row.pack(fill="x", padx=16, pady=(0, 14))
+        n = sum(1 for a in achievements.ACHIEVEMENTS if a[0] in unlocked)
+        tk.Label(row, text=f"{n} / {total}", bg=PANEL, fg=TXT, font=("Segoe UI Black", 20)).pack(side="left")
+        bar = tk.Canvas(row, height=10, bg=BG, highlightthickness=0)
+        bar.pack(side="left", fill="x", expand=True, padx=16)
+        bar.bind("<Configure>", lambda e, c=bar, f=n / total: (c.delete("all"), c.create_rectangle(
+            0, 0, e.width * f, 10, fill=ACCENT, outline="")))
+        tk.Label(row, text=f"{round(100 * n / total)}%", bg=PANEL, fg=ACCENT, font=("Segoe UI Semibold", 12)).pack(
+            side="left")
+        btn(row, t("Check now", "Şimdi kontrol et"), lambda: self.check_achievements()).pack(side="right", padx=(16, 0))
+
+        filt = tk.Frame(p, bg=BG)
+        filt.pack(fill="x", padx=28, pady=(8, 2))
+        cur = getattr(self, "ach_filter", "all")
+        segmented(filt, [("all", t("All", "Tümü"))] + [(c, t(*name)) for c, name in achievements.CATEGORIES]
+                  + [("locked", t("Locked", "Kilitli"))], cur, self._set_ach_filter)
+
+        grid = tk.Frame(p, bg=BG)
+        grid.pack(fill="x", padx=22, pady=(6, 28))
+        grid.columnconfigure(0, weight=1, uniform="ach")
+        grid.columnconfigure(1, weight=1, uniform="ach")
+        shown = [a for a in achievements.ACHIEVEMENTS
+                 if cur == "all" or a[1] == cur or (cur == "locked" and a[0] not in unlocked)]
+        if best is None:
+            tk.Label(grid, text=t("Reading the saves…", "Kayıtlar okunuyor…"), bg=BG, fg=DIM,
+                     font=("Segoe UI", 10)).grid(row=0, column=0, sticky="w", padx=6)
+        for i, (aid, _cat, icon, title, desc, stat, target) in enumerate(shown):
+            done = aid in unlocked
+            card = tk.Frame(grid, bg=PANEL, highlightbackground=ACCENT if done else EDGE, highlightthickness=1)
+            card.grid(row=i // 2 + 1, column=i % 2, sticky="nsew", padx=6, pady=6)
+            tk.Label(card, text=icon, bg=ACCENT if done else BG, fg="#03140f" if done else DIM,
+                     font=("Segoe UI Symbol", 18), width=2).pack(side="left", fill="y", ipadx=8)
+            body = tk.Frame(card, bg=PANEL)
+            body.pack(side="left", fill="both", expand=True, padx=12, pady=10)
+            tk.Label(body, text=t(*title), bg=PANEL, fg=TXT if done else DIM, font=("Segoe UI Semibold", 11),
+                     anchor="w").pack(fill="x")
+            tk.Label(body, text=t(*desc), bg=PANEL, fg=DIM, font=("Segoe UI", 8), anchor="w", justify="left",
+                     wraplength=330).pack(fill="x")
+            if done:
+                tk.Label(body, text=t(f"Unlocked {unlocked[aid]}", f"Açıldı: {unlocked[aid]}"), bg=PANEL, fg=ACCENT,
+                         font=("Segoe UI", 8), anchor="w").pack(fill="x", pady=(4, 0))
+            elif target > 1 and best is not None:
+                value = min(best.get(stat, 0), target)
+                prog = tk.Frame(body, bg=PANEL)
+                prog.pack(fill="x", pady=(6, 0))
+                shown_value = f"{value:g}" if isinstance(value, float) else str(value)
+                tk.Label(prog, text=f"{shown_value} / {target:g}", bg=PANEL, fg=DIM, font=("Segoe UI", 8)).pack(
+                    side="right", padx=(8, 0))
+                c = tk.Canvas(prog, height=6, width=60, bg=BG, highlightthickness=0)
+                c.pack(side="left", fill="x", expand=True)
+                c.bind("<Configure>", lambda e, cv=c, f=value / target: (cv.delete("all"), cv.create_rectangle(
+                    0, 0, e.width * f, 6, fill=DIM, outline="")))
+        tk.Label(p, text=t("Flag lists: the TotK savegame editor by Marc Robledo and its researchers (MIT).",
+                           "Bayrak listeleri: Marc Robledo'nun TotK kayıt editörü ve araştırmacıları (MIT)."),
+                 bg=BG, fg=DIM, font=("Segoe UI", 8), anchor="w").pack(fill="x", padx=28, pady=(0, 20))
+
+    def _set_ach_filter(self, value):
+        self.ach_filter = value
+        self._rerender("achievements")
+
+    def _rerender(self, page):
+        y = self.main.canvas.yview()[0]
+        self.show(page)
+        self.root.update_idletasks()
+        self.main.canvas.yview_moveto(y)
+
     # -- cheats
     def page_cheats(self, p):
         self._title(p, t("Cheats", "Hileler"),
@@ -1197,6 +1324,7 @@ class App:
         card = Card(p, t("VALUES", "DEĞERLER"))
         card.pack(fill="x", padx=28, pady=6)
         self.cheat_vars = {}
+        self.cheat_now = values
         for key, _name, _kind, _unit, top, label, help_ in cheats():
             if key not in values:
                 continue
@@ -1209,7 +1337,8 @@ class App:
                      + (f"  ·  {help_}" if help_ else ""), bg=PANEL, fg=DIM, font=("Segoe UI", 8),
                      anchor="w").pack(fill="x")
             var = tk.StringVar(value=f"{values[key]:g}")
-            tk.Spinbox(f, from_=0 if key == "rupee" else 1, to=top, textvariable=var, width=9, bg=BG, fg=TXT,
+            tk.Spinbox(f, from_=0 if key == "rupee" else 1, to=max(top, values[key]), increment=0.2 if key == "stamina" else 1,
+                       format="%.1f" if key == "stamina" else "%.0f", textvariable=var, width=9, bg=BG, fg=TXT,
                        buttonbackground=PANEL, relief="flat", insertbackground=TXT,
                        font=("Segoe UI", 10)).pack(side="right")
             btn(f, t("Max", "En çok"), lambda v=var, m=top: v.set(str(m))).pack(side="right", padx=8)
@@ -1237,7 +1366,14 @@ class App:
                 v = float(var.get().replace(",", "."))
             except ValueError:
                 return messagebox.showerror("TotK", t(f"Not a number: {var.get()}", f"Geçersiz sayı: {var.get()}"))
-            values[key] = max(0 if key == "rupee" else 1, min(top, int(v)))
+            if abs(v - self.cheat_now.get(key, -1)) < 1e-6:
+                continue  # untouched: keep the save's value, even one outside the usual range
+            v = max(0 if key == "rupee" else 1, min(top, v))
+            v = round(v * 5) / 5 if key == "stamina" else int(v)
+            if abs(v - self.cheat_now.get(key, -1)) > 1e-6:
+                values[key] = v
+        if not values:
+            return self.toast(t("No changes", "Değişiklik yok"))
         try:
             backup_saves("before-cheats", 0)
             write_cheats(slot, values)
@@ -1334,6 +1470,8 @@ class App:
             self.toast("RomFS " + fact)
 
     def _set_running(self, on: bool):
+        if self.running and not on:
+            self.root.after(1500, self.check_achievements)
         self.was_running = self.running or getattr(self, "was_running", False)
         self.running = on
         self._show_state()
