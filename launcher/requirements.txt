@@ -1,0 +1,3 @@
+fonttools>=4.40
+zstandard>=0.21
+Pillow>=10.0

@@ -1,0 +1,5 @@
+launcher/launcher.json
+launcher/ini-backups/
+launcher/rt/
+__pycache__/
+*.tmp
