@@ -3,7 +3,12 @@
 
 const api = () => window.pywebview.api;
 window.addEventListener("error", (e) => { try { api().log(`${e.message} @${e.lineno}:${e.colno}`); } catch (_) {} });
-window.addEventListener("unhandledrejection", (e) => { try { api().log(`promise: ${e.reason && (e.reason.stack || e.reason.message || e.reason)}`); } catch (_) {} });
+window.addEventListener("unhandledrejection", (e) => {
+  // a Python error in an API call: show it instead of a button that seems to do nothing
+  const msg = e.reason && (e.reason.message || e.reason);
+  try { api().log(`promise: ${e.reason && (e.reason.stack || msg)}`); } catch (_) {}
+  try { toast(`Error: ${msg}`); } catch (_) {}
+});
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

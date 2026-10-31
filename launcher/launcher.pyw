@@ -264,8 +264,9 @@ class Api:
 
     def choose_game(self):
         import webview
+        # pywebview filters must look like "Description (*.ext)"
         res = self._window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=False,
-                                             file_types=("totk.exe (totk.exe)", "Programs (*.exe)"))
+                                              file_types=("TotK game (*.exe)",))
         if not res:
             return {"ok": False}
         exe = Path(res[0] if isinstance(res, (list, tuple)) else res)
@@ -453,6 +454,14 @@ class Api:
 
     # -- play
     def play(self):
+        try:
+            return self._play()
+        except Exception as e:  # noqa: BLE001 - shown on the page instead of failing silently
+            self._preparing = False
+            self.log(f"play: {e!r}")
+            return {"ok": False, "message": t(f"Could not start the game: {e}", f"Oyun başlatılamadı: {e}")}
+
+    def _play(self):
         if not core.EXE.exists():
             return {"ok": False, "message": t("totk.exe not found", "totk.exe bulunamadı")}
         if self._running or self._preparing:
