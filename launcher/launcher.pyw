@@ -9,6 +9,7 @@ import base64
 import io
 import json
 import os
+import re
 import shutil
 import sys
 import threading
@@ -124,7 +125,74 @@ def strings() -> dict:
         "last_start": ("Last start", "Son açılış"), "files": ("files", "dosya"), "on": ("on", "açık"),
         "off": ("off", "kapalı"), "unknown": ("not known yet", "henüz bilinmiyor"),
         "more_ach": ("more achievements", "başarım daha"),
+        "theme": ("Theme", "Tema"), "theme_help": ("The look of the launcher.", "Launcher'ın görünümü."),
+        "theme_light": ("Light", "Açık"), "theme_night": ("Night", "Gece"),
+        "game_title": ("Tears of the Kingdom", "Tears of the Kingdom"),
+        "last_session": ("Last session", "Son oturum"), "avg_fps": ("average", "ortalama"),
+        "low_fps": ("1% low", "%1 düşük"), "frames": ("frames", "kare"),
+        "not_ready": ("totk.exe was not found in the game folder.", "Oyun klasöründe totk.exe bulunamadı."),
+        "fps_applied": ("Applied immediately to totk.ini", "totk.ini'ye hemen uygulanır"),
+        "log_sub": ("logs\\totk.log · last 80 lines", "logs\\totk.log · son 80 satır"),
+        "always_on": ("always on", "hep açık"),
+        "lang_hint": ("The language of the launcher.", "Launcher'ın dili."),
+        "folder_hint": ("The folder containing totk.exe.", "totk.exe'nin bulunduğu klasör."),
+        "backup_note": ("A backup is created before every save.", "Her kayıttan önce yedek alınır."),
+        "save_settings": ("Save settings", "Ayarları kaydet"),
+        "prompts_sub": ("The preview updates from your current bindings.",
+                        "Önizleme mevcut atamalarından güncellenir."),
+        "input": ("Input", "Giriş"), "key_bindings": ("Key bindings", "Tuş atamaları"), "action": ("Action", "Eylem"),
+        "actions_n": ("actions", "eylem"), "save_bindings": ("Save bindings", "Atamaları kaydet"),
+        "backup_on_play_hint": ("Creates a timestamped copy before the game starts.",
+                                "Oyun başlamadan önce tarihli bir kopya oluşturur."),
+        "keep_hint": ("Older automatic backups are removed when this limit is reached.",
+                      "Sınıra ulaşılınca eski otomatik yedekler silinir."),
+        "close_hint": ("Exit the launcher after totk.exe opens.", "totk.exe açılınca launcher kapanır."),
+        "newest_first": ("Newest first", "En yeni en üstte"),
+        "kind_auto": ("Automatic", "Otomatik"), "kind_manual": ("Manual", "Elle"),
+        "kind_before_restore": ("Before restore", "Geri yüklemeden önce"),
+        "kind_before_cheats": ("Before cheats", "Hilelerden önce"),
+        "overall": ("Overall progress", "Genel ilerleme"),
+        "notice_ok": ("A backup is created before changes are applied.",
+                      "Değişiklikler uygulanmadan önce yedek alınır."),
+        "notice_ok_sub": ("Cheats are available only while the game is closed.",
+                          "Hileler yalnızca oyun kapalıyken uygulanabilir."),
+        "notice_run_sub": ("Save editing is locked while totk.exe is running.",
+                           "totk.exe çalışırken kayıt düzenleme kilitli."),
+        "selected_save": ("Selected save", "Seçili kayıt"),
+        "slot_hint": ("Slots are sorted by most recently played.", "En son oynanan en üstte."),
+        "values_sub": ("Enter a value or use Max to reach the allowed limit.",
+                       "Bir değer girin ya da en yüksek değer için En çok'a basın."),
+        "safe_edit": ("Game is closed · safe to edit", "Oyun kapalı · düzenlenebilir"),
+        "locked_edit": ("Game is running · editing locked", "Oyun çalışıyor · düzenleme kilitli"),
+        "apply_changes": ("Apply changes", "Değişiklikleri uygula"),
+        "no_cancel": ("No, cancel", "Hayır, vazgeç"), "yes_continue": ("Yes, continue", "Evet, devam et"),
+        "first_setup": ("First setup", "İlk kurulum"), "play_again": ("Play again", "Tekrar oyna"),
     }.items()}
+
+
+def last_start() -> str:
+    """When the game last wrote its log: "Today, 09:42", "Yesterday, 22:06" or a date."""
+    try:
+        when = core.GAME_LOG.stat().st_mtime
+    except OSError:
+        return ""
+    day = time.strftime("%Y%m%d", time.localtime(when))
+    clock = time.strftime("%H:%M", time.localtime(when))
+    if day == time.strftime("%Y%m%d"):
+        return t("Today", "Bugün") + ", " + clock
+    if day == time.strftime("%Y%m%d", time.localtime(time.time() - 86400)):
+        return t("Yesterday", "Dün") + ", " + clock
+    return time.strftime(t("%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M"), time.localtime(when))
+
+
+def last_session() -> dict | None:
+    """The game's own measurement at the end of the last run (the frametime line of logs\\totk.log)."""
+    for line in reversed(core.log_lines(400)):
+        m = re.search(r"frametime: exit: (\d+) frames in ([\d.]+) s, mean ([\d.]+) fps, 1% low ([\d.]+) fps", line)
+        if m:
+            return {"frames": int(m.group(1)), "seconds": float(m.group(2)), "mean": float(m.group(3)),
+                    "low": float(m.group(4))}
+    return None
 
 
 class Api:
@@ -160,7 +228,7 @@ class Api:
         return {"found": paths.FOUND, "lang": self._cfg["lang"], "langs": i18n.LANGS, "strings": strings(),
                 "start_page": page,
                 "root": str(ROOT), "cfg": {k: self._cfg[k] for k in ("mods", "prompts", "backup_before_play",
-                                                                   "backup_keep", "close_on_play")}}
+                                                                   "backup_keep", "close_on_play", "theme")}}
 
     def set_lang(self, code):
         self._set_cfg("lang", code)
@@ -168,8 +236,13 @@ class Api:
         return self.boot()
 
     def set_option(self, key, value):
-        if key in ("mods", "prompts", "backup_before_play", "backup_keep", "close_on_play"):
+        if key in ("mods", "prompts", "backup_before_play", "backup_keep", "close_on_play", "theme"):
             self._set_cfg(key, value)
+        return True
+
+    def title_bar(self, dark, color):
+        """Matches the window's title bar to the theme: dark (bool) and the caption colour (#rrggbb)."""
+        set_title_bar(bool(dark), str(color))
         return True
 
     def _set_cfg(self, key, value):
@@ -205,7 +278,7 @@ class Api:
         return {
             "exe": core.EXE.exists(), "version": core.installed_version(),
             "gpu": core.log_fact(r"vk: using gpu \d+: (.+)"), "mods": len(mods), "mods_on": self._cfg["mods"],
-            "patches": len(patches), "last": core.log_fact(r"RomFS (ready: .+)"),
+            "patches": len(patches), "last": last_start(), "session": last_session(),
             "fps": core.read_ini().get("fps_limit", "60"), "log": "\n".join(core.log_lines(80)),
         }
 
@@ -505,7 +578,8 @@ def restart() -> None:
     os._exit(0)
 
 
-def dark_title_bar() -> None:
+def set_title_bar(dark: bool, color: str = "#182935") -> None:
+    """Dark or light title bar with the caption colour of the page (the theme sets it at start and on a change)."""
     try:
         import ctypes
         for _ in range(50):
@@ -513,10 +587,11 @@ def dark_title_bar() -> None:
             if hwnd:
                 break
             time.sleep(0.1)
-        dark = ctypes.c_int(1)
-        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(dark), ctypes.sizeof(dark))
-        color = ctypes.c_int(0x00140C07)  # caption colour, BGR: matches the page
-        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 35, ctypes.byref(color), ctypes.sizeof(color))
+        on = ctypes.c_int(1 if dark else 0)
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(on), ctypes.sizeof(on))
+        r, g, b = (int(color.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+        caption = ctypes.c_int(b << 16 | g << 8 | r)  # COLORREF is 0x00BBGGRR
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 35, ctypes.byref(caption), ctypes.sizeof(caption))
     except Exception:  # noqa: BLE001 - cosmetic
         pass
 
@@ -533,10 +608,13 @@ def main():
         core.migrate_old_names()
     import webview
     api = Api()
+    light = api._cfg["theme"] == "light"
+    paper = "#f2d4ac" if light else "#182935"   # the background of the page, shown before it loads
     window = webview.create_window("TotK Launcher", str(UI), js_api=api, width=1240, height=800,
-                                   min_size=(1040, 660), background_color="#070c14", text_select=False)
+                                   min_size=(1040, 660), background_color=paper, text_select=False)
     api._window = window
-    webview.start(dark_title_bar, gui="edgechromium", debug="--debug" in sys.argv,
+    webview.start(set_title_bar, args=(not light, paper), gui="edgechromium", icon=str(RES / "icon.ico"),
+                  debug="--debug" in sys.argv,
                   storage_path=str(Path(os.environ.get("LOCALAPPDATA", Path.home())) / "TotK Launcher" / "webview"))
 
 

@@ -26,13 +26,19 @@ little it needs for the button icons is read from your own installation.
 
 ## Screenshots
 
-| Controls | Achievements |
+| Night theme | Controls |
 |---|---|
-| ![Controls](docs/controls.png) | ![Achievements](docs/achievements.png) |
+| ![Night theme](docs/home-night.png) | ![Controls](docs/controls.png) |
+
+| Achievements |
+|---|
+| ![Achievements](docs/achievements.png) |
 
 ## Features
 
-- **Home**: game status, graphics card, a quick frame rate limit and the latest game log.
+- **Home**: the installed version, graphics card and mods in one line, the frame rate of your last session (average
+  and 1% low, from the game's own log), a quick frame rate limit and the latest game log.
+- **Themes**: Light (default) or Night, in Settings > Launcher.
 - **Settings**: frame rate, display, language and sound options, written to `totk.ini` without touching its comments
   (a backup is taken before every save).
 - **Controls**: rebind keyboard, mouse and controller buttons (click a cell, press a key or a mouse button), controller
@@ -56,7 +62,7 @@ or 11 (the window uses Microsoft Edge WebView2, which they include).
    - **Put it in the game folder**, next to `totk.exe`: it finds the game by itself, or
    - **Start it from anywhere** (Downloads, Desktop…): the first time it asks you to select `totk.exe` and
      remembers the folder. Settings > Launcher > Game folder changes it later.
-3. Press **PLAY**. Home > Desktop shortcut adds a shortcut.
+3. Press **PLAY**. Home > Recent log > Desktop shortcut adds a shortcut.
 
 Windows SmartScreen may warn about an unknown publisher the first time, since the exe is not signed: choose
 "More info" > "Run anyway".
@@ -105,7 +111,7 @@ and `i18n.py`.
 ## Türkçe
 
 Tears of the Kingdom PC recomp için launcher: ayarlar, tuş atama, oyunda klavye/fare tuş simgeleri (aksiyon simgesi
-dahil), 55 başarım, kayıt yedekleme ve hileler. [Son sürümden](https://github.com/FurkanAnc/totk-launcher/releases/latest)
+dahil), 55 başarım, kayıt yedekleme ve hileler. Açık ve gece teması var. [Son sürümden](https://github.com/FurkanAnc/totk-launcher/releases/latest)
 `TotK Launcher.exe`'yi indirin; `totk.exe`'nin yanına koyun ya da herhangi bir yerden açıp `totk.exe`'yi seçin. Arayüz
 dili Settings > Interface language'dan Türkçe yapılabilir.
 
@@ -116,8 +122,11 @@ The achievement flag lists (`launcher/achievement_data.json`) come from the
 research by MacSpazzy, Phil, savage13, Karlos007, Echocolat and MrCheeze. MIT License, Copyright (c) 2017-2023 Marc
 Robledo.
 
-Fonts: [Cinzel](https://fonts.google.com/specimen/Cinzel) and [Nunito Sans](https://fonts.google.com/specimen/Nunito+Sans),
-SIL Open Font License (`launcher/ui/fonts`).
+Fonts: [Cinzel](https://fonts.google.com/specimen/Cinzel), [Nunito Sans](https://fonts.google.com/specimen/Nunito+Sans) and
+[Fraunces](https://fonts.google.com/specimen/Fraunces), SIL Open Font License (`launcher/ui/fonts`).
+
+The pictures in `launcher/ui/img` (the backgrounds, the PLAY plate and the app icon) were made for this launcher; it
+uses no logo or picture from the game.
 
 ## License
 

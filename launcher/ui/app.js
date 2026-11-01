@@ -1,4 +1,5 @@
-// TotK Launcher page. Talks to launcher.pyw through window.pywebview.api (every call returns a Promise).
+// TotK Launcher page, laid out after the Figma design. Talks to launcher.pyw through window.pywebview.api (every call
+// returns a Promise).
 "use strict";
 
 const api = () => window.pywebview.api;
@@ -19,141 +20,151 @@ let BOOT = null;     // api.boot()
 let PAGE = "home";
 let STATE = "ready";
 
-// ------------------------------------------------------------------ art
-const EMBLEM = `<svg viewBox="0 0 64 64" aria-hidden="true">
-  <defs><linearGradient id="eg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbe9b4"/><stop offset="1" stop-color="#b48a41"/></linearGradient></defs>
-  <circle cx="32" cy="32" r="29" fill="none" stroke="url(#eg)" stroke-width="1.6"/>
-  <circle cx="32" cy="32" r="21" fill="none" stroke="url(#eg)" stroke-width="1" opacity=".7"/>
-  ${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<line x1="32" y1="5" x2="32" y2="${a % 90 ? 10 : 13}" stroke="url(#eg)" stroke-width="1.6" transform="rotate(${a} 32 32)"/>`).join("")}
-  <path d="M32 15 L40 32 L32 49 L24 32 Z" fill="url(#eg)"/>
-  <path d="M32 21 L36 32 L32 43 L28 32 Z" fill="#0a161b"/>
-  <circle cx="32" cy="32" r="2.4" fill="url(#eg)"/>
-</svg>`;
+// ------------------------------------------------------------------ icons (from the design)
+const ICON = {
+  home: '<path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9M9 20v-6h6v6"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1 1.55V21h-4v-.08a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3v-4h.08a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3h4v.08a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21v4h-.08a1.7 1.7 0 0 0-1.52 1Z"/>',
+  controls: '<path d="M8 7h8a6 6 0 0 1 5.7 7.9l-1 3a2.7 2.7 0 0 1-4.4 1.1l-1.8-1.7h-5L7.7 19a2.7 2.7 0 0 1-4.4-1.1l-1-3A6 6 0 0 1 8 7Z"/><path d="M7 11v4M5 13h4"/><circle cx="17" cy="11.5" r=".7" fill="currentColor"/><circle cx="19" cy="14" r=".7" fill="currentColor"/>',
+  saves: '<path d="M5 3h12l3 3v15H4V4a1 1 0 0 1 1-1Z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>',
+  achievements: '<circle cx="12" cy="9" r="6"/><path d="m8.5 14-1 7 4.5-2 4.5 2-1-7"/><path d="m12 6 .8 1.7 1.9.2-1.4 1.3.4 1.8-1.7-.9-1.7.9.4-1.8-1.4-1.3 1.9-.2Z"/>',
+  cheats: '<path d="M9 3h6M10 3v5l-5.8 9.5A2.3 2.3 0 0 0 6.2 21h11.6a2.3 2.3 0 0 0 2-3.5L14 8V3"/><path d="M7.5 15h9M9 12h6"/>',
+  folder: '<path d="M3 6h7l2 2h9v11H3Z"/><path d="M3 6V4h6l2 2"/>',
+  refresh: '<path d="M20 6v5h-5"/><path d="M19 11a7.5 7.5 0 1 0 .1 4"/>',
+  external: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v7H4V6h7"/>',
+  check: '<path d="m5 12 4 4L19 6"/>',
+  gamepad: '<rect x="3" y="6" width="18" height="12" rx="5"/><path d="M8 9v6M5 12h6M16 10h.01M19 14h.01"/>',
+  chip: '<rect x="7" y="7" width="10" height="10" rx="1"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/>',
+  layers: '<path d="m12 2 9 5-9 5-9-5Z"/><path d="m3 12 9 5 9-5M3 17l9 5 9-5"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>',
+  trash: '<path d="M4 7h16M9 3h6l1 4M6 7l1 14h10l1-14M10 11v6M14 11v6"/>',
+  restore: '<path d="M4 9V4h5"/><path d="M5 5a9 9 0 1 1-1 10"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  minus: '<path d="M5 12h14"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
+  play: '<path d="m8 5 11 7-11 7Z"/>',
+  chevron: '<path d="m9 6 6 6-6 6"/>',
+};
+const icon = (name, size = 18) => `<svg class="i" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true">${ICON[name]}</svg>`;
 
-function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+// ------------------------------------------------------------------ building blocks
+const pageHeader = (title, desc, eyebrow) =>
+  `<div class="page-header"><div>${eyebrow ? `<span class="eyebrow">${esc(eyebrow)}</span>` : ""}<h1>${esc(title)}</h1><p>${esc(desc)}</p></div></div>`;
+const section = (title, desc, body, cls = "") =>
+  `<section class="section ${cls}"><div class="section-head"><div><h2>${esc(title)}</h2>${desc ? `<p>${esc(desc)}</p>` : ""}</div></div>${body}</section>`;
+const field = (label, hint, control) =>
+  `<div class="field"><div class="field-copy"><label>${esc(label)}</label><p>${esc(hint || "")}</p></div><div class="field-control">${control}</div></div>`;
+const button = (label, { variant = "secondary", ic = null, attrs = "" } = {}) =>
+  `<button type="button" class="button ${variant}" ${attrs}>${ic ? icon(ic, 16) : ""}${esc(label)}</button>`;
+const toggle = (on, attrs = "") => `<button type="button" class="toggle ${on ? "on" : ""}" aria-pressed="${on}" ${attrs}><span></span></button>`;
+const select = (options, current, attrs = "") =>
+  `<select ${attrs}>${options.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(current) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+const segmented = (options, current, cls = "segmented", attrs = "") =>
+  `<div class="${cls}" ${attrs}>${options.map(([v, l]) => `<button type="button" data-v="${esc(v)}" class="${v === current ? "active" : ""}">${esc(l)}</button>`).join("")}</div>`;
+const range = (id, lo, hi, value, suffix = "") =>
+  `<div class="range-control"><input type="range" id="${id}" min="${lo}" max="${hi}" value="${esc(value)}" data-suffix="${suffix}"><output>${esc(value)}${suffix}</output></div>`;
 
-function heroArt() {
-  const r = rnd(7);
-  let stars = "";
-  for (let i = 0; i < 70; i++) {
-    const x = r() * 1000, y = r() * 130, s = r() * 1.3 + 0.3;
-    stars += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${s.toFixed(2)}" fill="#fff" opacity="${(0.35 + r() * 0.6).toFixed(2)}" ${i % 4 === 0 ? `class="twinkle" style="animation-delay:${(r() * 3).toFixed(1)}s"` : ""}/>`;
-  }
-  const island = (x, y, w, cls) => `<g transform="translate(${x} ${y}) scale(${w})"><g class="${cls}">
-      <path d="M-60 0 Q-40 -10 0 -9 Q40 -10 62 0 L48 10 L36 26 L22 20 L10 44 L-4 28 L-18 36 L-30 18 L-44 16 Z" fill="#0b2328"/>
-      <path d="M-60 0 Q-40 -10 0 -9 Q40 -10 62 0 Q40 -4 0 -3 Q-40 -4 -60 0 Z" fill="#2f6b5c"/>
-      <rect x="20" y="4" width="3" height="70" fill="url(#fall)" opacity=".7"/>
-      <path d="M-28 -9 L-24 -26 L-20 -9 Z M-14 -9 L-9 -32 L-4 -9 Z" fill="#163a35"/>
-    </g></g>`;
-  return `<svg viewBox="0 0 1000 230" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-    <defs>
-      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#081427"/><stop offset=".55" stop-color="#14394a"/><stop offset="1" stop-color="#2d6662"/>
-      </linearGradient>
-      <radialGradient id="moon" cx="0.82" cy="0.22" r="0.35"><stop offset="0" stop-color="#f3e2a8" stop-opacity=".55"/><stop offset="1" stop-color="#f3e2a8" stop-opacity="0"/></radialGradient>
-      <linearGradient id="fall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfe9e2"/><stop offset="1" stop-color="#bfe9e2" stop-opacity="0"/></linearGradient>
-      <filter id="blur"><feGaussianBlur stdDeviation="8"/></filter>
-    </defs>
-    <rect width="1000" height="230" fill="url(#sky)"/>
-    <rect width="1000" height="230" fill="url(#moon)"/>
-    <circle cx="820" cy="52" r="16" fill="#f7ecc8" opacity=".9"/>
-    ${stars}
-    <ellipse cx="300" cy="120" rx="180" ry="14" fill="#fff" opacity=".06" filter="url(#blur)"/>
-    <ellipse cx="760" cy="150" rx="220" ry="16" fill="#fff" opacity=".05" filter="url(#blur)"/>
-    ${island(640, 92, 1.15, "drift")}
-    ${island(880, 128, 0.7, "drift2")}
-    ${island(470, 70, 0.55, "drift2")}
-    <path d="M0 190 L80 150 L150 172 L240 128 L330 168 L420 140 L520 176 L610 146 L700 178 L800 150 L900 182 L1000 160 L1000 230 L0 230 Z" fill="#123139" opacity=".95"/>
-    <path d="M0 210 L110 182 L210 202 L320 176 L430 206 L560 184 L690 208 L820 186 L930 206 L1000 196 L1000 230 L0 230 Z" fill="#0a1f25"/>
-    <rect y="170" width="1000" height="60" fill="url(#sky)" opacity=".15"/>
-  </svg>`;
+function bindSegmented(root, onPick) {
+  $$("button", root).forEach((b) => b.addEventListener("click", () => {
+    $$("button", root).forEach((x) => x.classList.toggle("active", x === b));
+    onPick(b.dataset.v);
+  }));
+}
+function bindToggles(root) {
+  $$(".toggle", root).forEach((t) => t.addEventListener("click", () => {
+    const on = !t.classList.contains("on");
+    t.classList.toggle("on", on); t.setAttribute("aria-pressed", on);
+    t.dispatchEvent(new CustomEvent("toggle", { detail: on }));
+  }));
+}
+function bindRanges(root) {
+  $$("input[type=range]", root).forEach((r) => r.addEventListener("input", () => { r.nextElementSibling.textContent = r.value + (r.dataset.suffix || ""); }));
 }
 
-const ICONS = {
-  home: '<path d="M3 11 12 4l9 7v9H5v-9"/><path d="M10 20v-6h4v6"/>',
-  settings: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
-  controls: '<rect x="2.5" y="7" width="19" height="11" rx="5"/><path d="M7 10.5v4M5 12.5h4"/><circle cx="16" cy="11.5" r="1"/><circle cx="18" cy="14" r="1"/>',
-  saves: '<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>',
-  achievements: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 21h8M9 17h6"/>',
-  cheats: '<path d="M4 20 15 9M14 4l1.5 3 3 1.5-3 1.5L14 13l-1.5-3-3-1.5 3-1.5z"/><path d="M19 14v4M17 16h4"/>',
-};
-
-// ------------------------------------------------------------------ helpers
 function toast(msg) {
   if (!msg) return;
   const t = el(`<div class="toast">${esc(msg)}</div>`);
   $("#toasts").append(t);
-  setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 300); }, 4200);
+  setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 260); }, 2800);
 }
 
 function unlockPopup(ev) {
-  const t = el(`<div class="toast unlock"><div class="medal">${esc(ev.icon)}</div>
-    <div><div class="k">${esc(S.ach_unlocked)}</div><div class="t">${esc(ev.title)}</div><div class="d">${esc(ev.desc)}</div></div></div>`);
+  const t = el(`<div class="toast unlock"><span>${esc(ev.icon)}</span><div><b>${esc(S.ach_unlocked)}</b><em>${esc(ev.title)}</em>${esc(ev.desc)}</div></div>`);
   $("#toasts").append(t);
-  setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 300); }, 5200);
+  setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 260); }, 5000);
 }
 
-function confirmBox(text, okLabel, danger = false) {
+function confirmBox(title, body = "") {
   return new Promise((resolve) => {
-    const m = $("#modal");
-    m.innerHTML = `<div class="card"><h3>${esc(S.confirm)}</h3><p>${esc(text)}</p>
-      <div class="actions"><span class="spacer"></span><button class="btn" data-v="0">${esc(S.cancel)}</button>
-      <button class="btn ${danger ? "danger" : "gold"}" data-v="1">${esc(okLabel || S.yes)}</button></div></div>`;
-    m.classList.remove("hidden");
-    const done = (v) => { m.classList.add("hidden"); m.innerHTML = ""; resolve(v); };
-    $$("button", m).forEach((b) => b.addEventListener("click", () => done(b.dataset.v === "1")));
-    m.addEventListener("click", (e) => { if (e.target === m) done(false); }, { once: true });
+    const d = el(`<div class="dialog-backdrop"><div class="dialog">
+      <h2>${esc(title)}</h2><p>${esc(body)}</p>
+      <div>${button(S.no_cancel, { attrs: 'data-v="0"' })}${button(S.yes_continue, { variant: "primary", attrs: 'data-v="1"' })}</div></div></div>`);
+    document.body.append(d);
+    const done = (v) => { d.remove(); resolve(v); };
+    $$("[data-v]", d).forEach((b) => b.addEventListener("click", () => done(b.dataset.v === "1")));
+    d.addEventListener("mousedown", (e) => { if (e.target === d) done(false); });
   });
 }
 
-const seg = (options, current, attr) =>
-  `<div class="seg" ${attr}>${options.map(([v, label]) => `<button data-v="${esc(v)}" class="${v === current ? "on" : ""}">${esc(label)}</button>`).join("")}</div>`;
-
-function bindSeg(root, onPick) {
-  $$("button", root).forEach((b) => b.addEventListener("click", () => {
-    $$("button", root).forEach((x) => x.classList.toggle("on", x === b));
-    onPick(b.dataset.v);
-  }));
+// ------------------------------------------------------------------ theme
+function applyTheme() {
+  const theme = (BOOT && BOOT.cfg.theme) === "night" ? "night" : "light";
+  document.documentElement.dataset.theme = theme;
+  try { api().title_bar(theme === "night", theme === "night" ? "#182935" : "#f2d4ac"); } catch (_) {}
 }
-
-const divider = (label) => `<div class="divider"><span>${esc(label)}</span></div>`;
-const header = (title, sub) => `<h1 class="page-title">${esc(title)}</h1>${sub ? `<p class="page-sub">${esc(sub)}</p>` : ""}`;
 
 // ------------------------------------------------------------------ shell
+const PAGES_ORDER = ["home", "settings", "controls", "saves", "achievements", "cheats"];
+
 function renderShell() {
   document.documentElement.lang = BOOT.lang;
-  $("#root").innerHTML = `<div class="app">
-    <aside class="side">
-      <div class="brand">${EMBLEM}<div><div class="name">TOTK</div><div class="tag">${esc(S.subtitle)}</div></div></div>
-      <nav class="nav">${["home", "settings", "controls", "saves", "achievements", "cheats"].map((p) =>
-        `<button data-page="${p}"><svg viewBox="0 0 24 24">${ICONS[p]}</svg>${esc(S[p])}</button>`).join("")}</nav>
-      <div class="side-bottom">
-        <div class="state" id="state"><i></i><span></span></div>
-        <button class="play" id="play"></button>
-        <label class="check small dim"><span class="switch"><input type="checkbox" id="mods" ${BOOT.cfg.mods ? "checked" : ""}><span></span></span>${esc(S.load_mods)}</label>
+  $("#root").innerHTML = `<div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><img src="img/icon.png" alt=""><div class="wordmark">TotK Launcher<span>Tears of the Kingdom</span></div></div>
+      <nav>${PAGES_ORDER.map((p) => `<button type="button" data-page="${p}"><span>${esc(S[p])}</span>${p === "achievements" ? '<i id="achcount" class="hidden"></i>' : ""}</button>`).join("")}</nav>
+      <div class="sidebar-bottom">
+        <div class="mod-toggle"><div><strong>${esc(S.load_mods)}</strong><span>romfs_mods</span></div>${toggle(BOOT.cfg.mods, 'id="mods"')}</div>
+        <div class="play-panel"><button type="button" class="play-button" data-play></button><span class="playstate"><i></i><em></em></span></div>
       </div>
     </aside>
-    <main class="main" id="main"></main>
+    <div class="main-column">
+      <header class="titlebar"><div><span class="titlebar-page" id="pagename"></span><span class="path">${esc(BOOT.root)}\\totk.exe</span></div></header>
+      <main id="main"></main>
+    </div>
   </div>`;
-  $$(".nav button").forEach((b) => b.addEventListener("click", () => go(b.dataset.page)));
-  $("#play").addEventListener("click", play);
-  $("#mods").addEventListener("change", async (e) => {
-    BOOT.cfg.mods = e.target.checked;
-    await api().set_option("mods", e.target.checked);
-    if (PAGE === "home" || PAGE === "controls") go(PAGE);
+  $$("nav button").forEach((b) => b.addEventListener("click", () => go(b.dataset.page)));
+  $$("[data-play]").forEach((b) => b.addEventListener("click", play));
+  bindToggles($(".mod-toggle"));
+  $("#mods").addEventListener("toggle", async (e) => {
+    BOOT.cfg.mods = e.detail;
+    await api().set_option("mods", e.detail);
+    if (PAGE === "home" || PAGE === "controls") go(PAGE, true);
   });
   showState(STATE);
+  achCount();
+}
+
+async function achCount() {
+  const d = await api().achievements();
+  const n = d.items.filter((a) => a.unlocked).length, badge = $("#achcount");
+  if (!badge) return;
+  badge.textContent = n;
+  badge.classList.toggle("hidden", n === 0);
 }
 
 function showState(state) {
   STATE = state;
-  const st = $("#state"), btn = $("#play");
-  if (!st) return;
-  st.className = "state " + state;
-  $("span", st).textContent = { ready: S.st_ready, running: S.st_running, closed: S.st_closed, preparing: S.st_preparing }[state];
-  const busy = state === "running" || state === "preparing";
-  btn.classList.toggle("busy", busy);
-  btn.textContent = state === "preparing" ? S.preparing : state === "running" ? S.running : S.play;
+  const label = { ready: S.play, preparing: S.preparing, running: S.running, closed: S.play_again }[state];
+  const busy = state === "preparing" || state === "running";
+  $$("[data-play]").forEach((btn) => {
+    btn.className = "play-button " + state;
+    btn.innerHTML = (busy ? "" : '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5v17L20 12z"/></svg>') + esc(label);
+  });
+  $$(".playstate").forEach((st) => {
+    $("i", st).className = state;
+    $("em", st).textContent = { ready: S.st_ready, running: S.st_running, closed: S.st_closed, preparing: S.st_preparing }[state];
+  });
 }
 
 async function play() {
@@ -165,11 +176,11 @@ async function play() {
 async function poll() {
   try {
     const st = await api().status();
-    showState(st.state);
+    if (st.state !== STATE) showState(st.state);
     for (const ev of st.events) {
       if (ev.type === "toast") toast(ev.message);
       else if (ev.type === "achievement") unlockPopup(ev);
-      else if (ev.type === "achievements_changed" && PAGE === "achievements" && !CAPTURE) go("achievements", true);
+      else if (ev.type === "achievements_changed") { achCount(); if (PAGE === "achievements" && !CAPTURE) go("achievements", true); }
     }
   } catch (e) { /* the window is closing */ }
   setTimeout(poll, 1200);
@@ -178,56 +189,73 @@ async function poll() {
 async function go(page, keepScroll = false) {
   PAGE = page;
   CAPTURE = null;
-  $$(".nav button").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
+  $$("nav button").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
+  $("#pagename").textContent = S[page];
+  $("#main").classList.toggle("home", page === "home");
+  $(".app-shell").classList.toggle("on-home", page === "home");
   const main = $("#main");
   const y = main.scrollTop;
-  const html = await PAGES[page]();
+  const out = await PAGES[page]();
   if (PAGE !== page) return;           // another page was chosen meanwhile
-  main.innerHTML = `<div class="page">${html.html}</div>`;
-  if (keepScroll) main.scrollTop = y; else main.scrollTop = 0;
-  html.after && html.after($(".page", main));
+  main.innerHTML = out.html;
+  main.scrollTop = keepScroll ? y : 0;
+  bindToggles(main); bindRanges(main);
+  out.after && out.after(main);
 }
 
 // ------------------------------------------------------------------ pages
 const PAGES = {};
 
-let LOG_OPEN = false;   // the recent log is folded away until asked for
+let LOG_OPEN = false;
+const num = (v, digits = 0) => Number(v).toLocaleString(BOOT.lang, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+function duration(sec) {
+  const tr = BOOT.lang === "tr", m = Math.round(sec / 60);
+  if (sec < 60) return `${Math.round(sec)} ${tr ? "sn" : "s"}`;
+  if (m < 60) return `${m} ${tr ? "dk" : "min"}`;
+  return `${Math.floor(m / 60)} ${tr ? "sa" : "h"} ${m % 60} ${tr ? "dk" : "min"}`;
+}
+
 PAGES.home = async () => {
   const d = await api().home();
-  const stat = (k, v, cls = "") => `<div class="stat"><div class="k">${esc(k)}</div><div class="v ${cls}" title="${esc(v)}">${esc(v)}</div></div>`;
   const fps = [["30", "30"], ["60", "60"], ["120", "120"], ["144", "144"], ["display", S.monitor]];
+  const logHtml = (d.log || S.no_log).split("\n").map((line) => {
+    if (/ready|started|success/i.test(line)) return `<span class="log-ok">${esc(line)}</span>`;
+    const m = /^(\[[^\]]*\])(.*)$/.exec(line);
+    return m ? `<span class="log-muted">${esc(m[1])}</span>${esc(m[2])}` : esc(line);
+  }).join("\n");
+  const facts = [
+    d.exe ? `<span class="ok">totk.exe ✓</span>` : `<span class="bad">totk.exe ${esc(S.not_found)}</span>`,
+    `<span>${esc(d.version)}</span>`,
+    `<span>${esc(d.gpu || S.unknown)}</span>`,
+    `<span>${esc(S.mods)}: ${d.mods} (${esc(d.mods_on ? S.on : S.off)})</span>`,
+    `<span>romfs-patches: ${d.patches}</span>`,
+  ].join("");
+  const ss = d.session;
+  const session = ss ? `<p class="session"><b>${esc(S.last_session)}</b> · ${esc(d.last)} · ${duration(ss.seconds)}, ${num(ss.frames)} ${esc(S.frames)}
+      · ${esc(S.avg_fps)} <em>${num(ss.mean, 1)} FPS</em> · ${esc(S.low_fps)} ${num(ss.low, 1)} FPS</p>`
+    : `<p class="session">${esc(S.last_start)}: ${esc(d.last || "—")}</p>`;
   return {
-    html: `<div class="hero">${heroArt()}<div class="title"><h1>Tears of the Kingdom</h1><p>${esc(S.subtitle)}</p></div></div>
-      <div class="stats">
-        ${stat(S.game, "totk.exe " + (d.exe ? S.found : S.not_found), d.exe ? "ok" : "bad")}
-        ${stat(S.version, d.version)}
-        ${stat(S.gpu, d.gpu || S.unknown)}
-        ${stat(S.mods, d.mods ? `${d.mods} ${S.files} · ${d.mods_on ? S.on : S.off}` : "—", d.mods && d.mods_on ? "ok" : "warn")}
-      </div>
-      ${divider(S.quick_fps)}
-      <div class="card"><div class="actions">${seg(fps, d.fps, 'id="fps"')}<span class="spacer"></span>
-        <span class="dim small">${esc(S.last_start)}: ${esc(d.last || "—")}</span></div></div>
-      <div class="card" style="margin-top:16px">
-        <div class="actions">
-          <button class="btn logtoggle ${LOG_OPEN ? "open" : ""}" id="logtoggle"><span class="chev">›</span>${esc(S.recent_log)}</button>
-          <button class="btn" data-open="logs">${esc(S.log_folder)}</button>
-          <button class="btn" data-open="game">${esc(S.game_folder_btn)}</button>
-          <span class="spacer"></span><button class="btn" id="shortcut">${esc(S.shortcut)}</button>
-        </div>
-        <div class="logwrap ${LOG_OPEN ? "open" : ""}" id="logwrap"><div>
-          <pre class="log" id="log">${esc(d.log || S.no_log)}</pre>
-          <div class="actions" style="margin-top:10px"><span class="spacer"></span><button class="btn small" id="refresh">${esc(S.refresh)}</button></div>
-        </div></div>
-      </div>`,
+    html: `<h1 class="home-title">${esc(S.game_title)}</h1>
+      <div class="facts">${facts}</div>
+      ${session}
+      ${section(S.quick_fps, S.fps_applied, segmented(fps, d.fps, "segmented fps", 'id="fps"'))}
+      <section class="section log-section">
+        <button type="button" class="section-toggle" id="logtoggle"><div><h2>${esc(S.recent_log)}</h2><p>${esc(S.log_sub)}</p></div><span class="${LOG_OPEN ? "rotate" : ""}">${icon("chevron")}</span></button>
+        <div id="logbody" class="${LOG_OPEN ? "" : "hidden"}"><div class="log-box" id="log"><code>${logHtml}</code></div>
+          <div class="button-row">${button(S.refresh, { attrs: 'id="refresh"' })}${button(S.log_folder, { attrs: 'data-open="logs"' })}${button(S.game_folder_btn, { attrs: 'data-open="game"' })}${button(S.shortcut, { variant: "ghost", attrs: 'id="shortcut"' })}</div></div>
+      </section>
+      <div class="launch"><span class="playstate"><i></i><em></em></span><button type="button" class="play-button" data-play></button></div>`,
     after(p) {
+      $$("[data-play]", p).forEach((b) => b.addEventListener("click", play));
+      showState(STATE);
       const log = $("#log", p); log.scrollTop = log.scrollHeight;
+      bindSegmented($("#fps", p), async (v) => { await api().quick_fps(v); toast(`${S.quick_fps}: ${v === "display" ? S.monitor : v}`); });
       $("#logtoggle", p).addEventListener("click", (e) => {
         LOG_OPEN = !LOG_OPEN;
-        e.currentTarget.classList.toggle("open", LOG_OPEN);
-        $("#logwrap", p).classList.toggle("open", LOG_OPEN);
+        $("span", e.currentTarget).classList.toggle("rotate", LOG_OPEN);
+        $("#logbody", p).classList.toggle("hidden", !LOG_OPEN);
         if (LOG_OPEN) log.scrollTop = log.scrollHeight;
       });
-      bindSeg($("#fps", p), async (v) => { await api().quick_fps(v); toast(`${S.quick_fps}: ${v === "display" ? S.monitor : v}`); });
       $("#refresh", p).addEventListener("click", () => go("home", true));
       $$("[data-open]", p).forEach((b) => b.addEventListener("click", () => api().open_folder(b.dataset.open)));
       $("#shortcut", p).addEventListener("click", async () => toast((await api().shortcut()).message));
@@ -235,54 +263,43 @@ PAGES.home = async () => {
   };
 };
 
+// "FRAME RATE" -> "Frame rate" (the settings schema writes its group titles in capitals)
+const sentence = (s) => { const l = s.toLocaleLowerCase(BOOT.lang); return l.charAt(0).toLocaleUpperCase(BOOT.lang) + l.slice(1); };
+
 PAGES.settings = async () => {
   const d = await api().settings();
-  const input = (it) => {
+  const control = (it) => {
     const id = `s_${it.key}`;
-    if (it.kind === "bool") {
-      const on = !["", "0", "false", "off"].includes(String(it.value));
-      return `<label class="switch"><input type="checkbox" id="${id}" ${on ? "checked" : ""}><span></span></label>`;
-    }
-    if (it.kind === "scale") {
-      const [lo, hi] = it.choices;
-      return `<div class="range"><input type="range" id="${id}" min="${lo}" max="${hi}" value="${esc(it.value)}"><output>${esc(it.value)}</output></div>`;
-    }
-    if (it.kind === "gpu") {
-      return `<select id="${id}"><option value="">${esc(S.automatic)}</option>${d.gpus.map(([i, n]) =>
-        `<option value="${esc(i)}" ${String(i) === String(it.value) ? "selected" : ""}>${esc(i)}: ${esc(n)}</option>`).join("")}</select>`;
-    }
-    if (it.kind === "combo") {
-      return `<input type="text" id="${id}" list="${id}_l" value="${esc(it.value)}"><datalist id="${id}_l">${it.choices.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>`;
-    }
+    if (it.kind === "bool") return toggle(!["", "0", "false", "off"].includes(String(it.value)), `id="${id}"`);
+    if (it.kind === "scale") return range(id, it.choices[0], it.choices[1], it.value, it.key === "volume" ? "%" : "");
+    if (it.kind === "gpu") return select([["", S.automatic], ...d.gpus.map(([i, n]) => [i, `${i}: ${n}`])], it.value, `id="${id}"`);
+    if (it.kind === "combo") return `<input type="text" class="combo" id="${id}" list="${id}_l" value="${esc(it.value)}"><datalist id="${id}_l">${it.choices.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>`;
     const choices = it.choices.includes(it.value) ? it.choices : [it.value, ...it.choices];
-    return `<select id="${id}">${choices.map((c) => `<option ${c === it.value ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>`;
+    return select(choices.map((c) => [c, c]), it.value, `id="${id}"`);
   };
   return {
-    html: `${header(S.settings, S.settings_sub)}
-      <div class="card"><h3>${esc(S.launcher)}</h3>
-        <div class="row"><div><div class="label">${esc(S.ui_lang)}</div></div>${seg(BOOT.langs, BOOT.lang, 'id="lang"')}</div>
-        <div class="row"><div><div class="label">${esc(S.game_folder)}</div><div class="help">${esc(BOOT.root)}</div></div>
-          <button class="btn" id="chgame">${esc(S.change)}</button></div>
-      </div>
-      ${d.groups.map((g) => `<div class="card"><h3>${esc(g.title)}</h3>${g.items.map((it) =>
-        `<div class="row"><div><div class="label">${esc(it.label)}</div>${it.help ? `<div class="help">${esc(it.help)}</div>` : ""}</div>${input(it)}</div>`).join("")}</div>`).join("")}
-      <div class="actions" style="margin-top:20px"><button class="btn" id="openini">${esc(S.open_ini)}</button><span class="spacer"></span>
-        <button class="btn" id="reset">${esc(S.reset_defaults)}</button><button class="btn gold" id="save">${esc(S.save)}</button></div>`,
+    html: `${pageHeader(S.settings, S.settings_sub)}
+      ${section(S.launcher, "", field(S.ui_lang, S.lang_hint, select(BOOT.langs, BOOT.lang, 'id="lang"'))
+        + field(S.theme, S.theme_help, select([["light", S.theme_light], ["night", S.theme_night]], BOOT.cfg.theme, 'id="theme"'))
+        + field(S.game_folder, S.folder_hint, `<div class="inline-control"><input value="${esc(BOOT.root)}" readonly>${button(S.change, { attrs: 'id="chgame"' })}</div>`))}
+      ${d.groups.map((g) => section(sentence(g.title), "", g.items.map((it) => field(it.label, it.help, control(it))).join(""))).join("")}
+      <div class="sticky-actions"><span>${esc(S.backup_note)}</span><div>
+        ${button(S.open_ini, { variant: "ghost", attrs: 'id="openini"' })}${button(S.reset_defaults, { attrs: 'id="reset"' })}${button(S.save_settings, { variant: "primary", attrs: 'id="save"' })}</div></div>`,
     after(p) {
-      bindSeg($("#lang", p), async (code) => { BOOT = await api().set_lang(code); S = BOOT.strings; renderShell(); go("settings"); });
+      $("#lang", p).addEventListener("change", async (e) => { BOOT = await api().set_lang(e.target.value); S = BOOT.strings; renderShell(); go("settings"); });
+      $("#theme", p).addEventListener("change", async (e) => { BOOT.cfg.theme = e.target.value; await api().set_option("theme", e.target.value); applyTheme(); });
       $("#chgame", p).addEventListener("click", async () => { const r = await api().choose_game(); if (r.message) toast(r.message); });
-      $$("input[type=range]", p).forEach((r) => r.addEventListener("input", () => { r.nextElementSibling.textContent = r.value; }));
       $("#openini", p).addEventListener("click", () => api().open_ini());
       $("#save", p).addEventListener("click", async () => {
         const values = {};
         d.groups.forEach((g) => g.items.forEach((it) => {
           const x = $(`#s_${it.key}`, p);
-          values[it.key] = it.kind === "bool" ? x.checked : x.value;
+          values[it.key] = it.kind === "bool" ? x.classList.contains("on") : x.value;
         }));
         toast((await api().save_settings(values)).message);
       });
       $("#reset", p).addEventListener("click", async () => {
-        if (await confirmBox(S.reset_defaults + "?", S.reset_defaults, true)) { toast((await api().reset_settings()).message); go("settings"); }
+        if (await confirmBox(S.reset_defaults + "?", S.settings_sub)) { toast((await api().reset_settings()).message); go("settings"); }
       });
     },
   };
@@ -330,19 +347,16 @@ PAGES.controls = async () => {
   const d = await api().controls();
   const binds = JSON.parse(JSON.stringify(d.binds));
   const sets = d.prompt_sets.map(([v, label]) => [v, label ? S[label] : "Switch"]);
-  const groups = [];
-  d.buttons.forEach((b) => { if (!groups.length || groups[groups.length - 1].name !== b.group) groups.push({ name: b.group, items: [] }); groups[groups.length - 1].items.push(b); });
-  const padOpts = (cur) => [["default", S.default], ["none", S.none], ...d.pads].map(([v, l]) => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(l)}</option>`).join("");
-  let prompt = d.prompts;
-  let previewTimer = null;
+  let prompt = d.prompts, previewTimer = null;
+  const padOpts = [["default", S.default], ["none", S.none], ...d.pads];
 
   CTRL = {
     isStick: (b) => d.buttons.find((x) => x.id === b).stick,
     draw() {
-      $$(".key").forEach((c) => {
+      $$("[data-key]").forEach((c) => {
         const keys = binds[c.dataset.b].keys, i = +c.dataset.i;
         const cap = CAPTURE && CAPTURE.b === c.dataset.b && CAPTURE.i === i;
-        c.classList.toggle("capture", !!cap);
+        c.classList.toggle("listening", !!cap);
         c.classList.toggle("empty", !cap && i >= keys.length);
         c.textContent = cap ? S.press_key : i < keys.length ? d.key_labels[keys[i]] || keys[i] : "—";
       });
@@ -366,40 +380,32 @@ PAGES.controls = async () => {
     const box = $("#preview"); if (!box) return;
     const r = await api().preview(prompt, binds);
     if ($("#preview") !== box) return;
-    box.innerHTML = r.ok ? `<img src="${r.src}" alt="">` : `<span class="dim small">${esc(r.message)}</span>`;
+    box.innerHTML = r.ok ? `<img src="${r.src}" alt="">` : esc(r.message);
   }
 
+  let group = null;
+  const rows = d.buttons.map((b) => {
+    const head = b.group !== group ? `<div class="binding-group">${esc((group = b.group))}</div>` : "";
+    const pad = b.stick ? `<div class="stick">${esc(b.id.startsWith("L") ? S.left_stick : S.right_stick)}</div>`
+      : select(padOpts, binds[b.id].pad, `data-pad="${b.id}"`);
+    return `${head}<div class="binding-row"><strong>${esc(b.label)}</strong>
+      <button type="button" data-key data-b="${b.id}" data-i="0"></button><button type="button" data-key data-b="${b.id}" data-i="1"></button>${pad}</div>`;
+  }).join("");
+
   return {
-    html: `${header(S.controls, S.controls_sub)}
-      <div class="card"><h3>${esc(S.prompts_devices)}</h3>
-        <div class="row wide"><div class="label">${esc(S.button_prompts)}</div><div>${seg(sets, prompt, 'id="pset"')}
-          ${d.available ? "" : `<div class="help" style="color:var(--warn)">${esc(S.no_romfs)}</div>`}
-          <div class="help">${esc(S.prompts_help)}</div><div class="preview" id="preview"></div></div></div>
-        <div class="row wide"><div class="label">${esc(S.controller_layout)}</div><div>
-          ${seg([["auto", S.layout_auto], ["nintendo", S.layout_nintendo], ["xbox", S.layout_xbox]], d.pad_layout, 'id="layout"')}
-          <div class="help">${esc(S.layout_help)}</div></div></div>
-        <div class="row wide"><div class="label">${esc(S.mouse_camera)}</div><div>
-          <div class="range"><input type="range" id="sens" min="0" max="10" value="${d.mouse_sens}"><output>${d.mouse_sens}</output></div>
-          <div class="help">${esc(S.mouse_help)}</div></div></div>
-      </div>
-      <p class="page-sub" style="margin-top:22px">${esc(S.bind_help)}</p>
-      ${groups.map((g) => `${divider(g.name)}<div class="card"><div class="binds">
-        <div></div><div class="head">${esc(S.key1)}</div><div class="head">${esc(S.key2)}</div><div class="head">${esc(S.controller)}</div>
-        ${g.items.map((b) => `<div class="desc">${esc(b.label)}</div>
-          <div class="key" data-b="${b.id}" data-i="0"></div><div class="key" data-b="${b.id}" data-i="1"></div>
-          ${b.stick ? `<div class="stick">${esc(b.id.startsWith("L") ? S.left_stick : S.right_stick)}</div>`
-            : `<select data-pad="${b.id}">${padOpts(binds[b.id].pad)}</select>`}`).join("")}
-      </div></div>`).join("")}
-      <div class="actions" style="margin-top:20px"><button class="btn" id="undo">${esc(S.undo)}</button><span class="spacer"></span>
-        <button class="btn" id="reset">${esc(S.reset_bindings)}</button><button class="btn gold" id="save">${esc(S.save)}</button></div>`,
+    html: `${pageHeader(S.controls, S.controls_sub)}
+      ${section(S.button_prompts, S.prompts_sub, `<div class="prompt-row">${segmented(sets, prompt, "segmented", 'id="pset"')}
+        ${d.available ? "" : `<div class="prompt-note">${esc(S.no_romfs)}</div>`}
+        <div class="prompt-strip" id="preview"></div></div>`)}
+      ${section(S.input, "", field(S.controller_layout, S.layout_help, select([["auto", S.layout_auto], ["nintendo", S.layout_nintendo], ["xbox", S.layout_xbox]], d.pad_layout, 'id="layout"'))
+        + field(S.mouse_camera, S.mouse_help, range("sens", 0, 10, d.mouse_sens)))}
+      ${section(S.key_bindings, S.bind_help, `<div class="binding-table"><div class="binding-head"><span>${esc(S.action)}</span><span>${esc(S.key1)}</span><span>${esc(S.key2)}</span><span>${esc(S.controller)}</span></div>${rows}</div>`)}
+      <div class="sticky-actions"><span>${d.buttons.length} ${esc(S.actions_n)}</span><div>
+        ${button(S.undo, { variant: "ghost", attrs: 'id="undo"' })}${button(S.reset_bindings, { attrs: 'id="reset"' })}${button(S.save_bindings, { variant: "primary", attrs: 'id="save"' })}</div></div>`,
     after(p) {
       CTRL.draw(); loadPreview();
-      let layout = d.pad_layout;
-      bindSeg($("#pset", p), async (v) => { prompt = v; await api().set_option("prompts", v); BOOT.cfg.prompts = v; loadPreview(); });
-      bindSeg($("#layout", p), (v) => { layout = v; });
-      const sens = $("#sens", p);
-      sens.addEventListener("input", () => { sens.nextElementSibling.textContent = sens.value; });
-      $$(".key", p).forEach((c) => {
+      bindSegmented($("#pset", p), async (v) => { prompt = v; await api().set_option("prompts", v); BOOT.cfg.prompts = v; loadPreview(); });
+      $$("[data-key]", p).forEach((c) => {
         c.addEventListener("click", () => {
           CAPTURE = { b: c.dataset.b, i: +c.dataset.i, armed: false };
           CTRL.draw();
@@ -415,12 +421,12 @@ PAGES.controls = async () => {
       $("#save", p).addEventListener("click", async () => {
         const pads = {};
         $$("select[data-pad]", p).forEach((s) => { pads[s.dataset.pad] = s.value; });
-        toast((await api().save_controls(binds, pads, layout, +sens.value)).message);
+        toast((await api().save_controls(binds, pads, $("#layout", p).value, +$("#sens", p).value)).message);
         go("controls", true);
       });
       $("#undo", p).addEventListener("click", () => go("controls", true));
       $("#reset", p).addEventListener("click", async () => {
-        if (await confirmBox(S.reset_bindings + "?", S.reset_bindings, true)) { toast((await api().reset_controls()).message); go("controls", true); }
+        if (await confirmBox(S.reset_bindings + "?")) { toast((await api().reset_controls()).message); go("controls", true); }
       });
     },
   };
@@ -429,33 +435,33 @@ PAGES.controls = async () => {
 PAGES.saves = async () => {
   const d = await api().saves();
   const c = BOOT.cfg;
+  const kind = (name) => {
+    const tag = name.split(" ").slice(2).join(" ");
+    return { auto: S.kind_auto, otomatik: S.kind_auto, manual: S.kind_manual, "before-restore": S.kind_before_restore, "before-cheats": S.kind_before_cheats }[tag] || tag;
+  };
+  const list = d.backups.length ? d.backups.map((b) => `<div class="backup-item">
+      <div><strong>${esc(b.name)}</strong><span>${esc(kind(b.name))}</span></div><span class="backup-size">${b.size} MiB</span>
+      <div class="backup-actions">${button(S.restore, { attrs: `data-restore="${esc(b.name)}"` })}
+        ${button(S.delete, { variant: "ghost danger", attrs: `data-delete="${esc(b.name)}"` })}</div></div>`).join("")
+    : `<div class="empty-note">${esc(S.no_backups)}</div>`;
   return {
-    html: `${header(S.saves, S.saves_sub)}
-      <div class="card"><h3>${esc(S.auto_backup)}</h3>
-        <div class="row"><div class="label">${esc(S.backup_on_play)}</div><label class="switch"><input type="checkbox" id="bop" ${c.backup_before_play ? "checked" : ""}><span></span></label></div>
-        <div class="row"><div class="label">${esc(S.keep)}</div><input type="number" id="keep" min="1" max="100" value="${c.backup_keep}"></div>
-        <div class="row"><div class="label">${esc(S.close_on_play)}</div><label class="switch"><input type="checkbox" id="cop" ${c.close_on_play ? "checked" : ""}><span></span></label></div>
-      </div>
-      <div class="actions" style="margin:18px 0"><button class="btn gold" id="now">${esc(S.backup_now)}</button>
-        <button class="btn" data-open="saves">${esc(S.save_folder)}</button><button class="btn" data-open="backups">${esc(S.backup_folder)}</button></div>
-      <div class="card list"><h3>${esc(S.backups)}</h3>
-        ${d.backups.length ? d.backups.map((b) => `<div class="item"><div class="name">${esc(b.name)}</div><div class="meta">${b.size} MiB</div>
-          <button class="btn small" data-restore="${esc(b.name)}">${esc(S.restore)}</button>
-          <button class="btn small danger" data-delete="${esc(b.name)}">${esc(S.delete)}</button></div>`).join("")
-          : `<div class="dim">${esc(S.no_backups)}</div>`}
-      </div>`,
+    html: `${pageHeader(S.saves, S.saves_sub)}
+      ${section(S.auto_backup, "", field(S.backup_on_play, S.backup_on_play_hint, toggle(c.backup_before_play, 'id="bop"'))
+        + field(S.keep, S.keep_hint, `<input class="number-input" type="number" id="keep" min="1" max="100" value="${c.backup_keep}">`)
+        + field(S.close_on_play, S.close_hint, toggle(c.close_on_play, 'id="cop"'))
+        + `<div class="button-row padded">${button(S.backup_now, { variant: "primary", attrs: 'id="now"' })}${button(S.save_folder, { attrs: 'data-open="saves"' })}${button(S.backup_folder, { attrs: 'data-open="backups"' })}</div>`)}
+      ${section(S.backups, S.newest_first, `<div class="backup-list">${list}</div>`)}`,
     after(p) {
-      const opt = (id, key, read) => $(id, p).addEventListener("change", (e) => { BOOT.cfg[key] = read(e.target); api().set_option(key, BOOT.cfg[key]); });
-      opt("#bop", "backup_before_play", (x) => x.checked);
-      opt("#cop", "close_on_play", (x) => x.checked);
-      opt("#keep", "backup_keep", (x) => Math.max(1, Math.min(100, +x.value || 10)));
+      $("#bop", p).addEventListener("toggle", (e) => { BOOT.cfg.backup_before_play = e.detail; api().set_option("backup_before_play", e.detail); });
+      $("#cop", p).addEventListener("toggle", (e) => { BOOT.cfg.close_on_play = e.detail; api().set_option("close_on_play", e.detail); });
+      $("#keep", p).addEventListener("change", (e) => { BOOT.cfg.backup_keep = Math.max(1, Math.min(100, +e.target.value || 10)); api().set_option("backup_keep", BOOT.cfg.backup_keep); });
       $("#now", p).addEventListener("click", async () => { toast((await api().backup_now()).message); go("saves", true); });
       $$("[data-open]", p).forEach((b) => b.addEventListener("click", () => api().open_folder(b.dataset.open)));
       $$("[data-restore]", p).forEach((b) => b.addEventListener("click", async () => {
-        if (await confirmBox(`${S.restore}: ${b.dataset.restore}?`, S.restore)) { toast((await api().restore(b.dataset.restore)).message); go("saves", true); }
+        if (await confirmBox(`${S.restore}: ${b.dataset.restore}?`)) { toast((await api().restore(b.dataset.restore)).message); go("saves", true); }
       }));
       $$("[data-delete]", p).forEach((b) => b.addEventListener("click", async () => {
-        if (await confirmBox(`${S.delete}: ${b.dataset.delete}?`, S.delete, true)) { await api().delete_backup(b.dataset.delete); go("saves", true); }
+        if (await confirmBox(`${S.delete}: ${b.dataset.delete}?`)) { await api().delete_backup(b.dataset.delete); go("saves", true); }
       }));
     },
   };
@@ -465,23 +471,27 @@ let ACH_FILTER = "all";
 PAGES.achievements = async () => {
   const d = await api().achievements();
   const done = d.items.filter((a) => a.unlocked).length, total = d.items.length, pct = Math.round((100 * done) / total);
+  const cats = Object.fromEntries(d.categories);
   const shown = d.items.filter((a) => ACH_FILTER === "all" || a.cat === ACH_FILTER || (ACH_FILTER === "locked" && !a.unlocked));
   const fmt = (v) => (Number.isInteger(v) ? v.toLocaleString() : (+v).toFixed(1));
+  const card = (a) => {
+    const progress = !a.unlocked && a.target > 1 && a.value !== null;
+    const state = a.unlocked ? `${S.unlocked_on} ${a.unlocked}` : progress ? `${fmt(a.value)} / ${fmt(a.target)}` : S.locked;
+    const bar = progress ? `<div class="mini-progress"><i style="width:${Math.min(100, (100 * a.value) / a.target)}%"></i></div>` : "";
+    return `<article class="achievement-card ${a.unlocked ? "" : "locked"}"><div class="achievement-icon"><b>${esc(a.icon)}</b>${a.unlocked ? `<span>${icon("check", 12)}</span>` : ""}</div>
+      <div class="achievement-copy"><span>${esc(cats[a.cat])}</span><h3>${esc(a.title)}</h3><p>${esc(a.desc)}</p><div class="achievement-state">${esc(state)}</div>${bar}</div></article>`;
+  };
   return {
-    html: `${header(S.achievements, S.ach_sub)}
-      <div class="card"><div class="ach-top"><div class="ach-count">${done} / ${total}</div>
-        <div class="bar"><i style="width:${pct}%"></i></div><div class="ach-pct">${pct}%</div>
-        <button class="btn" id="check">${esc(S.check_now)}</button></div></div>
-      <div style="margin-top:18px">${seg([["all", S.all], ...d.categories, ["locked", S.locked]], ACH_FILTER, 'id="filter"')}</div>
-      <div class="achs">${shown.map((a) => `<div class="ach ${a.unlocked ? "done" : ""}"><div class="medal">${esc(a.icon)}</div><div style="flex:1;min-width:0">
-        <div class="t">${esc(a.title)}</div><div class="d">${esc(a.desc)}</div>
-        ${a.unlocked ? `<div class="when">${esc(S.unlocked_on)} · ${esc(a.unlocked)}</div>`
-          : a.target > 1 && a.value !== null ? `<div class="p"><div class="bar"><i style="width:${(100 * a.value) / a.target}%"></i></div>${fmt(a.value)} / ${fmt(a.target)}</div>` : ""}
-      </div></div>`).join("")}</div>
-      <p class="dim small" style="margin-top:22px">${esc(S.ach_credit)}</p>`,
+    html: `${pageHeader(S.achievements, S.ach_sub)}
+      <div class="achievement-summary"><div class="progress-ring"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19"/><circle class="ring-value" cx="22" cy="22" r="19" pathLength="100" stroke-dasharray="${pct} 100"/></svg><strong>${pct}%</strong></div>
+        <div><span>${esc(S.overall)}</span><h2>${done} <small>/ ${total}</small></h2><div class="wide-progress"><i style="width:${pct}%"></i></div></div>
+        ${button(S.check_now, { attrs: 'id="check"' })}</div>
+      <div class="filter-bar" id="filter">${[["all", S.all], ...d.categories, ["locked", S.locked]].map(([v, l]) => `<button type="button" data-v="${v}" class="${v === ACH_FILTER ? "active" : ""}">${esc(l)}</button>`).join("")}</div>
+      <div class="achievement-grid">${shown.map(card).join("")}</div>
+      <p class="credit">${esc(S.ach_credit)}</p>`,
     after(p) {
-      bindSeg($("#filter", p), (v) => { ACH_FILTER = v; go("achievements", true); });
-      $("#check", p).addEventListener("click", async () => { await api().check_achievements(); go("achievements", true); });
+      $$("#filter button", p).forEach((b) => b.addEventListener("click", () => { ACH_FILTER = b.dataset.v; go("achievements", true); }));
+      $("#check", p).addEventListener("click", async () => { await api().check_achievements(); achCount(); go("achievements", true); });
     },
   };
 };
@@ -489,23 +499,30 @@ PAGES.achievements = async () => {
 let CHEAT_SLOT = null;
 PAGES.cheats = async () => {
   const d = await api().cheats(CHEAT_SLOT);
-  if (!d.slots.length) return { html: `${header(S.cheats, S.cheats_sub)}<div class="card"><span style="color:var(--warn)">${esc(d.error || S.no_save)}</span></div>` };
+  if (!d.slots.length) return { html: `${pageHeader(S.cheats, S.cheats_sub)}<div class="notice warning"><div><strong>${esc(d.error || S.no_save)}</strong></div></div>` };
   const fmt = (v) => (Number.isInteger(v) ? String(v) : (+v).toFixed(1));
+  const editor = (f) => `<div class="value-editor"><div><label>${esc(f.label)}</label><span>${esc(S.now)}: <strong>${fmt(f.value)}</strong>${f.help ? " · " + esc(f.help) : ""}</span></div>
+    <div class="value-input"><button type="button" data-step="-1" data-f="${f.key}">${icon("minus", 15)}</button>
+      <input type="number" id="c_${f.key}" min="${f.min}" max="${Math.max(f.max, f.value)}" step="${f.step}" value="${fmt(f.value)}">
+      <button type="button" data-step="1" data-f="${f.key}">${icon("plus", 15)}</button></div>
+    <button type="button" class="max-button" data-max="${f.key}">${esc(S.max)}</button></div>`;
   return {
-    html: `${header(S.cheats, S.cheats_sub)}
-      ${d.running ? `<div class="card" style="border-color:var(--warn)"><span style="color:var(--warn)">${esc(S.game_running_warn)}</span></div>` : ""}
-      <div class="card"><h3>${esc(S.save_slot)}</h3><select id="slot" style="min-width:320px">${d.slots.map((s) =>
-        `<option value="${esc(s.id)}" ${s.id === d.slot ? "selected" : ""}>${esc(s.label)}</option>`).join("")}</select></div>
-      <div class="card"><h3>${esc(S.values)}</h3>${d.fields.map((f) => `<div class="row"><div><div class="label">${esc(f.label)}</div>
-        <div class="help">${esc(S.now)}: ${fmt(f.value)}${f.help ? " · " + esc(f.help) : ""}</div></div>
-        <div class="actions"><button class="btn small" data-max="${f.key}">${esc(S.max)}</button>
-        <input type="number" id="c_${f.key}" min="${f.min}" max="${Math.max(f.max, f.value)}" step="${f.step}" value="${fmt(f.value)}"></div></div>`).join("")}</div>
-      <div class="actions" style="margin-top:20px"><span class="dim small" style="flex:1">${esc(S.cheats_note)}</span>
-        <button class="btn" id="maxall">${esc(S.max_all)}</button><button class="btn gold" id="apply">${esc(S.apply)}</button></div>`,
+    html: `${pageHeader(S.cheats, S.cheats_sub)}
+      <div class="notice ${d.running ? "warning" : ""}"><div><strong>${esc(d.running ? S.game_running_warn : S.notice_ok)}</strong><span>${esc(d.running ? S.notice_run_sub : S.notice_ok_sub)}</span></div></div>
+      ${section(S.save_slot, "", field(S.selected_save, S.slot_hint, select(d.slots.map((s) => [s.id, s.label]), d.slot, 'id="slot"')))}
+      ${section(S.values, S.values_sub, `<div class="value-list">${d.fields.map(editor).join("")}</div>`)}
+      <p class="credit">${esc(S.cheats_note)}</p>
+      <div class="sticky-actions"><span>${esc(d.running ? S.locked_edit : S.safe_edit)}</span><div>
+        ${button(S.max_all, { attrs: 'id="maxall"' })}${button(S.apply_changes, { variant: "primary", attrs: 'id="apply"' })}</div></div>`,
     after(p) {
       $("#slot", p).addEventListener("change", (e) => { CHEAT_SLOT = e.target.value; go("cheats", true); });
       const max = (key) => { const f = d.fields.find((x) => x.key === key); $(`#c_${key}`, p).value = f.max; };
       $$("[data-max]", p).forEach((b) => b.addEventListener("click", () => max(b.dataset.max)));
+      $$("[data-step]", p).forEach((b) => b.addEventListener("click", () => {
+        const f = d.fields.find((x) => x.key === b.dataset.f), inp = $(`#c_${f.key}`, p);
+        const v = Math.min(Math.max(f.max, f.value), Math.max(f.min, (+inp.value || 0) + f.step * +b.dataset.step));
+        inp.value = fmt(Math.round(v * 10) / 10);
+      }));
       $("#maxall", p).addEventListener("click", () => d.fields.forEach((f) => max(f.key)));
       $("#apply", p).addEventListener("click", async () => {
         const values = {};
@@ -518,24 +535,26 @@ PAGES.cheats = async () => {
   };
 };
 
-// ------------------------------------------------------------------ setup (game not found)
+// ------------------------------------------------------------------ first setup (game not found)
 function renderSetup() {
   document.documentElement.lang = BOOT.lang;
-  $("#root").innerHTML = `<div class="setup"><div class="card">${EMBLEM}
-    <h1>${esc(S.find_game)}</h1><p>${esc(S.find_game_text)}</p>
-    <div class="actions" style="justify-content:center"><button class="btn gold" id="pick" style="height:46px;padding:0 28px;font-size:15px">${esc(S.select_exe)}</button></div>
-    <div style="margin-top:22px">${seg(BOOT.langs, BOOT.lang, 'id="lang"')}</div></div></div>`;
+  $("#root").innerHTML = `<div class="setup-screen"><div class="dialog-backdrop"><div class="dialog find-game">
+    <img class="find-game-icon" src="img/icon.png" alt=""><span class="eyebrow">${esc(S.first_setup)}</span>
+    <h2>${esc(S.find_game)}</h2><p>${esc(S.find_game_text)}</p>
+    <label>${esc(S.ui_lang)}</label>${select(BOOT.langs, BOOT.lang, 'id="lang"')}
+    <div>${button(S.select_exe, { variant: "primary", attrs: 'id="pick"' })}</div></div></div></div>`;
   $("#pick").addEventListener("click", async () => { const r = await api().choose_game(); if (r.message) toast(r.message); });
-  bindSeg($("#lang"), async (code) => { BOOT = await api().set_lang(code); S = BOOT.strings; renderSetup(); });
+  $("#lang").addEventListener("change", async (e) => { BOOT = await api().set_lang(e.target.value); S = BOOT.strings; renderSetup(); });
 }
 
 // ------------------------------------------------------------------ start
 async function start() {
   BOOT = await api().boot();
   S = BOOT.strings;
+  applyTheme();
   if (!BOOT.found) return renderSetup();
   renderShell();
-  go(BOOT.start_page || "home");
+  go(PAGES[location.hash.slice(1)] ? location.hash.slice(1) : BOOT.start_page || "home");
   poll();
 }
 if (window.pywebview && window.pywebview.api) start(); else window.addEventListener("pywebviewready", start);

@@ -56,6 +56,9 @@ def load_config() -> dict:
     cfg.setdefault("backup_before_play", True)
     cfg.setdefault("backup_keep", 10)
     cfg.setdefault("close_on_play", False)
+    cfg.setdefault("theme", "light")
+    if cfg["theme"] not in ("light", "night"):
+        cfg["theme"] = "light"
     cfg.setdefault("achievements", {})
     cfg["prompts"] = {"klavye": "keyboard", "playstation": "mod"}.get(cfg.get("prompts"), cfg.get("prompts"))
     if cfg["prompts"] not in prompts.PROMPT_SETS:
