@@ -26,13 +26,9 @@ little it needs for the button icons is read from your own installation.
 
 ## Screenshots
 
-| Night theme | Controls |
+| Controls | Achievements |
 |---|---|
-| ![Night theme](docs/home-night.png) | ![Controls](docs/controls.png) |
-
-| Achievements |
-|---|
-| ![Achievements](docs/achievements.png) |
+| ![Controls](docs/controls.png) | ![Achievements](docs/achievements.png) |
 
 ## Features
 
