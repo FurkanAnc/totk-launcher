@@ -46,10 +46,11 @@ def murmur3(text: str) -> int:
 
 
 class Save:
-    """The flags of one progress.sav: hash -> raw 32-bit value (arrays are not read)."""
+    """The flags of one progress.sav: hash -> raw 32-bit value. For an array the value is the offset of a 32-bit
+    count followed by the items (4 bytes each, 64 for a String64, bits for a BoolArray)."""
 
     def __init__(self, path: Path):
-        data = path.read_bytes()
+        data = self.data = path.read_bytes()
         if len(data) < 0x20 or struct.unpack_from("<I", data, 0)[0] != SAV_MAGIC:
             raise ValueError(f"{path}: not a progress.sav")
         end = min(struct.unpack_from("<I", data, 8)[0], len(data))
@@ -74,6 +75,24 @@ class Save:
     def is_(self, name, value="Complete") -> bool:
         """An enum flag holds murmur3(value); a bool holds 1."""
         return self.u32(name) == (1 if value is True else murmur3(value))
+
+    def _array(self, name) -> tuple[int, int]:
+        off = self.u32(name)
+        if off is None or off + 4 > len(self.data):
+            return 0, 0
+        return off + 4, struct.unpack_from("<I", self.data, off)[0]
+
+    def ints(self, name) -> list[int]:
+        start, n = self._array(name)
+        return list(struct.unpack_from(f"<{n}i", self.data, start)) if n else []
+
+    def strings(self, name) -> list[str]:
+        start, n = self._array(name)
+        return [self.data[start + i * 64:start + (i + 1) * 64].split(b"\0")[0].decode("utf-8", "replace") for i in range(n)]
+
+    def bools(self, name) -> list[bool]:
+        start, n = self._array(name)
+        return [bool(self.data[start + i // 8] >> (i % 8) & 1) for i in range(n)]
 
     def count(self, items, value=True) -> int:
         want = 1 if value is True else murmur3(value)
@@ -137,7 +156,34 @@ def stats(save: Save) -> dict[str, float]:
                   "MemoryOfTheDragon", "HyruleCastleIncident", "MainChallenge"):
         s["q_" + quest] = 1 if save.is_("Step_" + quest) else 0
     s["game_clear"] = 1 if save.is_("IsGameClear", True) or save.is_("Step_DefeatGanondorf") else 0
+
+    # play time, stables, Great Fairies, horses, pouches, armour, Autobuild
+    s["play_hours"] = (save.u32(0xE573F564) or 0) / 3600
+    s["stables"] = save.count(L["stables_visited"])
+    s["fairies"] = 1 if save.is_("GreatFairy4_AllRevival", True) else 0
+    s["pony_points"] = save.i32("HorseInnMemberPoint")
+    s["horses"] = sum(1 for n in save.strings("OwnedHorseList.ActorName") if n)
+    slots = {k: max(save.ints(f"Pouch.{k}.ValidNum") or [0]) for k in ("Weapon", "Bow", "Shield")}
+    s["slots_weapon"] = slots["Weapon"]
+    s["slots_all"] = 1 if slots["Weapon"] >= 20 and slots["Bow"] >= 14 and slots["Shield"] >= 20 else 0
+    armour = [n for n in save.strings("Pouch.Armor.Content.Name") if n]
+    s["armor_owned"] = len(armour)
+    s["armor_maxed"] = sum(1 for n in armour if armor_level(n) == 4)
+    s["autobuild_favs"] = sum(save.bools("AutoBuilder.Draft.Content.IsFavorite"))
+    s["likelike"] = kills("Enemy_LikeLike")
+    s["horriblin"] = kills("Enemy_Horablin")
+    s["boss_bokoblin"] = kills("Enemy_Bokoblin_Boss")
+    s["phantom"] = kills("Enemy_PhantomGanon")
     return s
+
+
+def armor_level(name: str) -> int | None:
+    """0 to 4 stars: the number in Armor_NNN_Part moves along an upgrade chain (achievement_data.json)."""
+    num = name.split("_")[1] if name.count("_") >= 2 else ""
+    for chain in data()["armor_upgrades"]:
+        if num in chain:
+            return chain.index(num)
+    return None
 
 
 # (id, category, icon, (title en, tr), (description en, tr), stat, target)
@@ -260,6 +306,44 @@ ACHIEVEMENTS = [
      ("Hold 100,000 rupees.", "100.000 rupiye sahip ol."), "rupees", 100000),
     ("poe_1000", HERO, "☄", ("Poe Collector", "Poe Koleksiyoncusu"),
      ("Hold 1000 Poes.", "1000 Poe'ya sahip ol."), "poes", 1000),
+    ("play_10", HERO, "⌛", ("Ten Hours In", "On Saat"), ("Play for 10 hours.", "10 saat oyna."), "play_hours", 10),
+    ("play_50", HERO, "⌛", ("Seasoned Traveller", "Deneyimli Gezgin"), ("Play for 50 hours.", "50 saat oyna."),
+     "play_hours", 50),
+    ("play_100", HERO, "⌛", ("Hyrule Is Home", "Hyrule Artık Evim"), ("Play for 100 hours.", "100 saat oyna."),
+     "play_hours", 100),
+    # exploration and collection that need the save's arrays
+    ("stables_all", EXPLORE, "⌂", ("Stable Hopper", "Ahır Ahır"),
+     ("Visit all 15 stables.", "15 ahırın hepsine uğra."), "stables", 15),
+    ("fairies_all", EXPLORE, "❀", ("Fairy Fountains", "Peri Çeşmeleri"),
+     ("Bring back all four Great Fairies.", "Dört Büyük Peri'nin hepsini geri getir."), "fairies", 1),
+    ("pony_100", EXPLORE, "♞", ("Stable Member", "Ahır Üyesi"),
+     ("Earn 100 Pony Points.", "100 Pony Points kazan."), "pony_points", 100),
+    ("pony_500", EXPLORE, "♞", ("Stable Regular", "Ahır Müdavimi"),
+     ("Earn 500 Pony Points.", "500 Pony Points kazan."), "pony_points", 500),
+    ("horses_5", EXPLORE, "♘", ("Horse Whisperer", "At Fısıldayan"),
+     ("Register 5 horses at the stables.", "Ahırlara 5 at kaydet."), "horses", 5),
+    ("slots_weapon", COLLECT, "⚔", ("Room to Spare", "Yer Var"),
+     ("Expand the weapon pouch to 20 slots.", "Silah çantasını 20 yuvaya çıkar."), "slots_weapon", 20),
+    ("slots_all", COLLECT, "⚔", ("Hestu's Best Customer", "Hestu'nun Gözdesi"),
+     ("Fill out every pouch: 20 weapons, 14 bows and 20 shields.", "Bütün çantaları doldur: 20 silah, 14 yay, "
+      "20 kalkan."), "slots_all", 1),
+    ("armor_50", COLLECT, "⛉", ("Wardrobe", "Gardırop"), ("Own 50 pieces of armour.", "50 parça zırha sahip ol."),
+     "armor_owned", 50),
+    ("armor_max_1", COLLECT, "★", ("Fairy-Touched", "Peri Dokunuşu"),
+     ("Upgrade a piece of armour to four stars.", "Bir zırhı dört yıldıza yükselt."), "armor_maxed", 1),
+    ("armor_max_10", COLLECT, "★", ("Fairy's Favourite", "Perilerin Gözdesi"),
+     ("Upgrade 10 pieces of armour to four stars.", "10 zırhı dört yıldıza yükselt."), "armor_maxed", 10),
+    ("autobuild_10", COLLECT, "⚙", ("Blueprint Collector", "Tasarım Koleksiyoncusu"),
+     ("Mark 10 Autobuild designs as favourites.", "Autobuild'de 10 tasarımı favorilere ekle."), "autobuild_favs", 10),
+    # combat against particular enemies
+    ("likelike_20", COMBAT, "◉", ("Like Like Dislike", "Like Like Avcısı"),
+     ("Defeat 20 Like Likes.", "20 Like Like yen."), "likelike", 20),
+    ("horriblin_20", COMBAT, "⇣", ("Look Up", "Yukarı Bak"), ("Defeat 20 Horriblins.", "20 Horriblin yen."),
+     "horriblin", 20),
+    ("bossbok_10", COMBAT, "♜", ("Boss Brawler", "Şef Avcısı"), ("Defeat 10 Boss Bokoblins.", "10 Boss Bokoblin yen."),
+     "boss_bokoblin", 10),
+    ("phantom_1", COMBAT, "☠", ("Phantom Menace", "Hayalet Avcısı"), ("Defeat a Phantom Ganon.", "Bir Phantom Ganon yen."),
+     "phantom", 1),
 ]
 
 

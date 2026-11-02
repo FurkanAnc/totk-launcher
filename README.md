@@ -19,8 +19,9 @@ are the Switch ones. TotK Launcher puts all of that in one place:
 - rebind every button on keyboard, mouse and controller,
 - see **your own keys** in the game instead of A / B / X / Y, the action prompt in the corner included,
 - keep several mods side by side and switch each one on or off,
-- track 55 achievements read from your saves, and your play time,
-- back up and restore saves, and tweak rupees, hearts, stamina and battery,
+- track 73 achievements read from your saves, and your play time,
+- back up and restore saves, and tweak rupees, hearts, stamina, battery, Poes, Pony Points, pouch slots and item
+  counts, or repair your equipment,
 - hear about a new recomp or launcher release.
 
 It runs on Windows 10 and 11, in English or Turkish (Settings > Interface language). It ships **no game files**: the
@@ -53,13 +54,16 @@ little it needs for the button icons is read from your own installation.
 - **Button prompts**: the in-game button icons can show your **keyboard and mouse** keys (drawn from your bindings,
   the action prompt in the corner included), the original **Switch** icons, or the icons of a font mod in
   `romfs_mods`.
-- **Achievements**: 55 achievements in five categories (story, exploration, collection, combat, hero), read from
-  your saves after every session: temples, shrines, Lightroots, Korok seeds, caves, wells, bosses, Lynels, Flurry
-  Rushes, the Compendium and more. A popup shows new ones; saves from the prologue do not count. Your play time is
+- **Achievements**: 73 achievements in five categories (story, exploration, collection, combat, hero), read from
+  your saves after every session: temples, shrines, Lightroots, Korok seeds, caves, wells, stables, Great Fairies,
+  bosses, Lynels, Like Likes, Flurry Rushes, armour upgrades, pouch slots, horses, Autobuild favourites, the
+  Compendium, play time and more. A popup shows new ones; saves from the prologue do not count. Your play time is
   shown too.
 - **Saves**: what each save slot holds (saved time, hearts, stamina, battery, rupees, play time), automatic backup before every
   launch, manual backups, restore.
-- **Cheats**: rupees, hearts, stamina wheels and battery cells in a save slot (while the game is closed).
+- **Cheats** (while the game is closed, with a backup first): rupees, hearts, stamina wheels, battery cells, Poes and
+  Pony Points; weapon, bow and shield slots; the stock of Zonaite, crystallized charges, arrows and bomb flowers you
+  already have; and a repair that refills the durability of every weapon, bow and shield.
 
 ## Install
 
@@ -124,8 +128,9 @@ and `i18n.py`.
 ## Türkçe
 
 Tears of the Kingdom PC recomp için launcher: ayarlar (recomp 0.2.8'in görüş alanı, renk ve görüntü oranı ayarları dahil),
-tuş atama, oyunda klavye/fare tuş simgeleri (aksiyon simgesi dahil), tek tek açılıp kapatılabilen mod listesi, 55
-başarım, oynama süresi, kayıt yuvası bilgisi, kayıt yedekleme, hileler ve yeni sürüm bildirimi. Açık ve gece teması
+tuş atama, oyunda klavye/fare tuş simgeleri (aksiyon simgesi dahil), tek tek açılıp kapatılabilen mod listesi, 73
+başarım, oynama süresi, kayıt yuvası bilgisi, kayıt yedekleme, hileler (Poe, Pony Points, çanta yuvaları, malzeme
+miktarı, ekipman onarma dahil) ve yeni sürüm bildirimi. Açık ve gece teması
 var. [Son sürümden](https://github.com/FurkanAnc/totk-launcher/releases/latest)
 `TotK Launcher.exe`'yi indirin; `totk.exe`'nin yanına koyun ya da herhangi bir yerden açıp `totk.exe`'yi seçin. Arayüz
 dili Settings > Interface language'dan Türkçe yapılabilir.
@@ -135,7 +140,7 @@ dili Settings > Interface language'dan Türkçe yapılabilir.
 The achievement flag lists (`launcher/achievement_data.json`) come from the
 [Zelda: Tears of the Kingdom savegame editor](https://github.com/marcrobledo/savegame-editors) by Marc Robledo, with
 research by MacSpazzy, Phil, savage13, Karlos007, Echocolat and MrCheeze. MIT License, Copyright (c) 2017-2023 Marc
-Robledo.
+Robledo. The weapon durability and armour upgrade tables and the save layout of pouches come from the same editor.
 
 Fonts: [Fraunces](https://fonts.google.com/specimen/Fraunces) and
 [Nunito Sans](https://fonts.google.com/specimen/Nunito+Sans), SIL Open Font License (`launcher/ui/fonts`).

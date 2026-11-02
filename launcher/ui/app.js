@@ -560,22 +560,27 @@ PAGES.cheats = async () => {
       <div class="notice ${d.running ? "warning" : ""}"><div><strong>${esc(d.running ? S.game_running_warn : S.notice_ok)}</strong><span>${esc(d.running ? S.notice_run_sub : S.notice_ok_sub)}</span></div></div>
       ${section(S.save_slot, "", field(S.selected_save, S.slot_hint, select(d.slots.map((s) => [s.id, s.label]), d.slot, 'id="slot"')))}
       ${section(S.values, S.values_sub, `<div class="value-list">${d.fields.map(editor).join("")}</div>`)}
+      ${section(S.inventory, S.inventory_sub, `<div class="value-list">${d.pouch_fields.map(editor).join("")}</div>`
+        + (d.missing.length ? `<p class="credit">${esc(S.not_owned)} ${esc(d.missing.join(", "))}</p>` : "")
+        + field(S.repair, `${S.repair_hint} (${d.worn} ${S.worn_n})`, toggle(false, 'id="repair"')))}
       <p class="credit">${esc(S.cheats_note)}</p>
       <div class="sticky-actions"><span>${esc(d.running ? S.locked_edit : S.safe_edit)}</span><div>
         ${button(S.max_all, { attrs: 'id="maxall"' })}${button(S.apply_changes, { variant: "primary", attrs: 'id="apply"' })}</div></div>`,
     after(p) {
+      const all = [...d.fields, ...d.pouch_fields];
       $("#slot", p).addEventListener("change", (e) => { CHEAT_SLOT = e.target.value; go("cheats", true); });
-      const max = (key) => { const f = d.fields.find((x) => x.key === key); $(`#c_${key}`, p).value = f.max; };
+      const max = (key) => { const f = all.find((x) => x.key === key); $(`#c_${key}`, p).value = f.max; };
       $$("[data-max]", p).forEach((b) => b.addEventListener("click", () => max(b.dataset.max)));
       $$("[data-step]", p).forEach((b) => b.addEventListener("click", () => {
-        const f = d.fields.find((x) => x.key === b.dataset.f), inp = $(`#c_${f.key}`, p);
+        const f = all.find((x) => x.key === b.dataset.f), inp = $(`#c_${f.key}`, p);
         const v = Math.min(Math.max(f.max, f.value), Math.max(f.min, (+inp.value || 0) + f.step * +b.dataset.step));
         inp.value = fmt(Math.round(v * 10) / 10);
       }));
-      $("#maxall", p).addEventListener("click", () => d.fields.forEach((f) => max(f.key)));
+      $("#maxall", p).addEventListener("click", () => all.forEach((f) => max(f.key)));
       $("#apply", p).addEventListener("click", async () => {
         const values = {};
-        d.fields.forEach((f) => { values[f.key] = $(`#c_${f.key}`, p).value; });
+        all.forEach((f) => { values[f.key] = $(`#c_${f.key}`, p).value; });
+        values.repair = $("#repair", p).classList.contains("on");
         const r = await api().apply_cheats(d.slot, values);
         toast(r.message);
         if (r.ok) go("cheats", true);

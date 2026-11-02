@@ -272,7 +272,144 @@ def cheats():
          t("1 to 3 wheels, in fifths.", "1-3 çark, beşte bir adımlarla.")),
         ("battery", "PlayerStatus.MaxEnergy", T_FLOAT, 1000, 8, t("Zonai battery cells", "Zonai pil hücresi"),
          t("1 to 8 cells.", "1-8 hücre.")),
+        ("poe", "PlayerStatus.CurrentMamo", T_INT, 1, 99999, t("Poes", "Poe"),
+         t("Spent at the Bargainer Statues in the Depths.", "Derinlikler'deki Bargainer heykellerinde harcanır.")),
+        ("pony", "HorseInnMemberPoint", T_INT, 1, 9999, t("Pony Points", "Pony Points"),
+         t("Rewards at the stables.", "Ahırlardaki ödüller için.")),
     ]
+
+
+ZERO_MIN = {"rupee", "poe", "pony"}   # cheats that may be set to 0
+
+
+# --------------------------------------------------------------------------- pouches (arrays in progress.sav)
+POUCH_SLOTS = [("slots_weapon", "Weapon", 20, ("Weapon slots", "Silah yuvası")),
+               ("slots_bow", "Bow", 14, ("Bow slots", "Yay yuvası")),
+               ("slots_shield", "Shield", 20, ("Shield slots", "Kalkan yuvası"))]
+POUCH_ITEMS = [("zonaite", "Item_Ore_L", ("Zonaite", "Zonaite")),
+               ("zonaite_l", "Item_Ore_M", ("Large Zonaite", "Büyük Zonaite")),
+               ("charge", "Energy_Material_01", ("Crystallized Charges", "Kristal enerji")),
+               ("charge_l", "Energy_Material_03", ("Large Crystallized Charges", "Büyük kristal enerji")),
+               ("arrow", "NormalArrow", ("Arrows", "Ok")),
+               ("bombflower", "BombFruit", ("Bomb Flowers", "Bomba çiçeği"))]
+ITEM_POUCHES = ("Material", "Arrow", "KeyItem")
+DURABILITY_UP = {murmur3("DurabilityUp"), murmur3("DurabilityUpPlus")}
+
+
+class SaveFile:
+    """A progress.sav to edit in place: scalars and the arrays the pouches are made of. Arrays: the value is the
+    offset of a 32-bit count followed by the items (4 bytes, or 64 for a String64)."""
+
+    def __init__(self, slot: Path):
+        self.path = slot / "progress.sav"
+        self.data = bytearray(self.path.read_bytes())
+        self.idx = _sav_index(self.data)
+
+    def _array(self, name: str) -> tuple[int, int]:
+        _kind, off = self.idx.get(murmur3(name), (None, None))
+        if off is None:
+            return 0, 0
+        ptr = struct.unpack_from("<I", self.data, off)[0]
+        if ptr + 4 > len(self.data):
+            return 0, 0
+        return ptr + 4, struct.unpack_from("<I", self.data, ptr)[0]
+
+    def ints(self, name: str) -> list[int]:
+        start, n = self._array(name)
+        return list(struct.unpack_from(f"<{n}i", self.data, start)) if n else []
+
+    def set_int(self, name: str, i: int, value: int) -> None:
+        start, n = self._array(name)
+        if not 0 <= i < n:
+            raise ValueError(f"{name}[{i}]")
+        struct.pack_into("<i", self.data, start + 4 * i, value)
+
+    def strings(self, name: str) -> list[str]:
+        start, n = self._array(name)
+        return [bytes(self.data[start + i * 64:start + (i + 1) * 64]).split(b"\0")[0].decode("utf-8", "replace")
+                for i in range(n)]
+
+    def find_item(self, item: str) -> tuple[str, int] | None:
+        """(pouch, index) of an item the player has."""
+        for pouch in ITEM_POUCHES:
+            names = self.strings(f"Pouch.{pouch}.Content.Name")
+            if item in names:
+                return pouch, names.index(item)
+        return None
+
+    def worn(self) -> list[tuple[str, int, int]]:
+        """(pouch, index, maximum) of every weapon, bow and shield below its full durability."""
+        table = __import__("achievements").data()["durability"]
+        out = []
+        for pouch in ("Weapon", "Bow", "Shield"):
+            names, life = self.strings(f"Pouch.{pouch}.Content.Name"), self.ints(f"Pouch.{pouch}.Content.Life")
+            kinds = [v & 0xFFFFFFFF for v in self.ints(f"Pouch.{pouch}.Content.Effect.Type")]
+            extra = self.ints(f"Pouch.{pouch}.Content.Effect.Value")
+            for i, name in enumerate(names):
+                if not name or i >= len(life) or life[i] < 0:
+                    continue
+                top = table.get(name, 70)
+                if i < len(kinds) and kinds[i] in DURABILITY_UP and i < len(extra) and 0 < extra[i] < 10000:
+                    top += extra[i]
+                if life[i] < top:
+                    out.append((pouch, i, top))
+        return out
+
+    def save(self) -> None:
+        """A new file, never written in place: saves share files with their backups through hard links."""
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_bytes(self.data)
+        os.replace(tmp, self.path)
+
+
+def read_pouches(slot: Path) -> dict:
+    """{"fields": [...], "missing": [labels], "worn": n} for the Cheats page."""
+    sav = SaveFile(slot)
+    fields, missing = [], []
+    for key, pouch, top, label in POUCH_SLOTS:
+        valid = sav.ints(f"Pouch.{pouch}.ValidNum")
+        if valid:
+            fields.append({"key": key, "label": t(*label), "value": max(valid), "min": max(valid), "max": top, "step": 1,
+                           "help": t(f"Up to {top}.", f"En çok {top}.")})
+    for key, item, label in POUCH_ITEMS:
+        found = sav.find_item(item)
+        if found:
+            pouch, i = found
+            fields.append({"key": key, "label": t(*label), "value": sav.ints(f"Pouch.{pouch}.Content.StockNum")[i],
+                           "min": 1, "max": 999, "step": 1, "help": ""})
+        else:
+            missing.append(t(*label))
+    return {"fields": fields, "missing": missing, "worn": len(sav.worn())}
+
+
+def write_pouches(slot: Path, values: dict, repair: bool) -> int:
+    """Writes pouch slots and item counts (only items the player has) and refills durability; returns the changes."""
+    sav = SaveFile(slot)
+    changes = 0
+    for key, pouch, top, _label in POUCH_SLOTS:
+        if key in values:
+            valid = sav.ints(f"Pouch.{pouch}.ValidNum")
+            v = max(max(valid or [0]), min(top, int(values[key])))
+            for i, old in enumerate(valid):
+                if old != v:
+                    sav.set_int(f"Pouch.{pouch}.ValidNum", i, v)
+                    changes += 1
+    for key, item, _label in POUCH_ITEMS:
+        if key in values:
+            found = sav.find_item(item)
+            if found:
+                pouch, i = found
+                v = max(1, min(999, int(values[key])))
+                if sav.ints(f"Pouch.{pouch}.Content.StockNum")[i] != v:
+                    sav.set_int(f"Pouch.{pouch}.Content.StockNum", i, v)
+                    changes += 1
+    if repair:
+        for pouch, i, top in sav.worn():
+            sav.set_int(f"Pouch.{pouch}.Content.Life", i, top)
+            changes += 1
+    if changes:
+        sav.save()
+    return changes
 
 
 LIFE = "PlayerStatus.Life"

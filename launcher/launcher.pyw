@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import sys
 import threading
 import time
@@ -65,7 +66,16 @@ def strings() -> dict:
         "slots": ("Save slots", "Kayıt yuvaları"), "slots_sub": ("What each slot holds, most recent first.",
                                                                "Her yuvada ne var, en son kaydedilen en üstte."),
         "hearts_s": ("hearts", "kalp"), "stamina_s": ("stamina", "dayanıklılık"), "battery_s": ("battery", "pil"),
-        "rupees_s": ("rupees", "rupi"), "saved_at": ("Saved", "Kaydedildi"), "layout_xbox_prompts": ("Xbox prompts", "Xbox simgeleri"),
+        "rupees_s": ("rupees", "rupi"),
+        "inventory": ("Inventory", "Envanter"),
+        "inventory_sub": ("Pouch slots and the stock of items you already have. Items you don't have yet can't be "
+                          "added here.", "Çanta yuvaları ve zaten sahip olduğun eşyaların sayısı. Henüz olmayan "
+                          "eşyalar buradan eklenemez."),
+        "not_owned": ("Not in this save yet:", "Bu kayıtta henüz yok:"),
+        "repair": ("Repair equipment", "Ekipmanı onar"),
+        "repair_hint": ("Refills the durability of every weapon, bow and shield to its full value when you apply.",
+                        "Uygula'ya basınca her silah, yay ve kalkanın dayanıklılığını tam değerine doldurur."),
+        "worn_n": ("worn items", "yıpranmış eşya"), "saved_at": ("Saved", "Kaydedildi"), "layout_xbox_prompts": ("Xbox prompts", "Xbox simgeleri"),
         "saves": ("Saves", "Kayıtlar"), "achievements": ("Achievements", "Başarımlar"), "cheats": ("Cheats", "Hileler"),
         "play": ("Play", "Oyna"), "running": ("Running", "Çalışıyor"), "preparing": ("Preparing…", "Hazırlanıyor…"),
         "st_ready": ("Ready", "Hazır"), "st_running": ("Game is running", "Oyun çalışıyor"),
@@ -595,14 +605,19 @@ class Api:
             values = core.read_cheats(chosen)
         except (OSError, ValueError) as e:
             return {"slots": [], "error": str(e)}
+        try:
+            pouches = core.read_pouches(chosen)
+        except (OSError, ValueError, struct.error):
+            pouches = {"fields": [], "missing": [], "worn": 0}
         fmt = t("%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M")
         return {
             "slots": [{"id": str(s), "label": f"{s.name} · {time.strftime(fmt, time.localtime((s / 'progress.sav').stat().st_mtime))}"}
                       for s in slots],
             "slot": str(chosen), "running": self._running,
             "fields": [{"key": key, "label": label, "help": help_, "max": top, "value": values[key],
-                        "step": 0.2 if key == "stamina" else 1, "min": 0 if key == "rupee" else 1}
+                        "step": 0.2 if key == "stamina" else 1, "min": 0 if key in core.ZERO_MIN else 1}
                        for key, _n, _k, _u, top, label, help_ in core.cheats() if key in values],
+            "pouch_fields": pouches["fields"], "missing": pouches["missing"], "worn": pouches["worn"],
         }
 
     def apply_cheats(self, slot, values):
@@ -613,6 +628,14 @@ class Api:
             return {"ok": False, "message": "?"}
         now = core.read_cheats(chosen)
         tops = {key: top for key, _n, _k, _u, top, *_r in core.cheats()}
+        repair = bool(values.pop("repair", False))
+        pouch_keys = {k for k, *_r in core.POUCH_SLOTS} | {k for k, *_r in core.POUCH_ITEMS}
+        pouch_values = {}
+        for key in [k for k in values if k in pouch_keys]:
+            try:
+                pouch_values[key] = int(float(str(values.pop(key)).replace(",", ".")))
+            except ValueError:
+                return {"ok": False, "message": t("Not a number", "Geçersiz sayı")}
         out = {}
         for key, v in values.items():
             try:
@@ -621,12 +644,17 @@ class Api:
                 return {"ok": False, "message": t(f"Not a number: {v}", f"Geçersiz sayı: {v}")}
             if key not in now or abs(v - now[key]) < 1e-6:
                 continue  # untouched: keep the save's value
-            v = max(0 if key == "rupee" else 1, min(tops[key], v))
+            v = max(0 if key in core.ZERO_MIN else 1, min(tops[key], v))
             out[key] = round(v * 5) / 5 if key == "stamina" else int(v)
-        if not out:
+        now_pouch = {f["key"]: f["value"] for f in core.read_pouches(chosen)["fields"]}
+        pouch_values = {k: v for k, v in pouch_values.items() if now_pouch.get(k) != v}
+        if not out and not pouch_values and not repair:
             return {"ok": True, "message": t("No changes", "Değişiklik yok")}
         core.backup_saves("before-cheats", 0)
-        core.write_cheats(chosen, out)
+        if out:
+            core.write_cheats(chosen, out)
+        if pouch_values or repair:
+            core.write_pouches(chosen, pouch_values, repair)
         return {"ok": True, "message": t(f"Cheats written to {chosen.name}", f"Hileler {chosen.name} yuvasına yazıldı")}
 
     # -- play
