@@ -126,7 +126,6 @@ function renderShell() {
       <div class="brand"><img src="img/icon.png" alt=""><div class="wordmark">TotK Launcher<span>Tears of the Kingdom</span></div></div>
       <nav>${PAGES_ORDER.map((p) => `<button type="button" data-page="${p}"><span>${esc(pageName(p))}</span>${p === "achievements" ? '<i id="achcount" class="hidden"></i>' : ""}</button>`).join("")}</nav>
       <div class="sidebar-bottom">
-        <div class="side-block"><label>${esc(S.quick_fps)}</label>${segmented(FPS(), "", "segmented", 'id="sidefps"')}</div>
         <div class="mod-toggle"><div><strong>${esc(S.load_mods)}</strong><span>romfs_mods</span></div>${toggle(BOOT.cfg.mods, 'id="mods"')}</div>
         <div class="play-panel"><button type="button" class="play-button" data-play></button><span class="playstate"><i></i><em></em></span></div>
       </div>
@@ -144,8 +143,6 @@ function renderShell() {
     await api().set_option("mods", e.detail);
     if (["home", "controls", "mods"].includes(PAGE)) go(PAGE, true);
   });
-  bindSegmented($("#sidefps"), async (v) => { await api().quick_fps(v); toast(`${S.quick_fps}: ${v === "display" ? S.monitor : v}`); });
-  api().home().then((d) => $$("#sidefps button").forEach((b) => b.classList.toggle("active", b.dataset.v === d.fps)));
   showState(STATE);
   achCount();
 }

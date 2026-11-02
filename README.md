@@ -38,7 +38,7 @@ little it needs for the button icons is read from your own installation.
 
 - **Home**: the installed version, graphics card and mods in one line, the frame rate of your last session (average
   and 1% low, from the game's own log), your total play time and a note when a newer recomp or launcher is out. The
-  frame rate limit and the mods switch are in the sidebar on every page.
+  mods switch is in the sidebar on every page.
 - **Themes**: Light (default) or Night, in Settings > Launcher.
 - **Settings**: frame rate, display, picture and camera, language, sound and input options, written to `totk.ini`
   without touching its comments (a backup is taken before every save). The options of recomp 0.2.8 are there too:
