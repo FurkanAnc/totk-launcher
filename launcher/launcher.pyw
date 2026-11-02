@@ -48,7 +48,11 @@ def strings() -> dict:
         "replaces": ("replaces files of", "şunun dosyalarını değiştirir:"),
         "mods_master_off": ("Load mods is off in the sidebar: no mod is used.",
                             "Kenar çubuğunda Yamalarla başlat kapalı: hiçbir mod kullanılmıyor."),
-        "play_time": ("Played", "Oynama süresi"), "sessions": ("sessions", "oturum"),
+        "play_time": ("Play time", "Oynama süresi"), "sessions": ("sessions", "oturum"),
+        "from_save": ("from your most played save", "en çok oynanan kayıttan"),
+        "no_play": ("No save yet", "Henüz kayıt yok"),
+        "game_ver": ("Game", "Oyun"), "recomp_ver": ("Recomp", "Recomp"), "up_to_date": ("up to date", "güncel"),
+        "available": ("available", "çıktı"), "fps_avg": ("avg", "ort."),
         "update_recomp": ("Recomp update", "Recomp güncellemesi"), "update_launcher": ("Launcher update",
                                                                                      "Launcher güncellemesi"),
         "update_have": ("you have", "sendeki"), "release_notes": ("Release page", "Sürüm sayfası"),
@@ -217,6 +221,13 @@ def last_start() -> str:
     return time.strftime(t("%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M"), time.localtime(when))
 
 
+def game_version() -> str:
+    try:
+        return json.loads((ROOT / "totk-install.json").read_text(encoding="utf-8")).get("version", "")
+    except (OSError, ValueError):
+        return ""
+
+
 def last_session() -> dict | None:
     """The game's own measurement at the end of the last run (the frametime line of logs\\totk.log)."""
     for line in reversed(core.log_lines(400)):
@@ -320,6 +331,8 @@ class Api:
             "gpu": core.log_fact(r"vk: using gpu \d+: (.+)"), "mods": len(mods), "mods_on": self._cfg["mods"],
             "patches": len(patches), "last": last_start(), "session": last_session(),
             "fps": core.read_ini().get("fps_limit", "60"), "play": self._cfg.get("play", {}),
+            "play_time": core.play_time(), "game_version": game_version(), "recomp": core.installed_release(),
+            "recomp_build": core.installed_build(),
         }
 
     def recent_log(self):
@@ -569,6 +582,7 @@ class Api:
             items.append({"id": aid, "cat": cat, "icon": icon, "title": t(*title), "desc": t(*desc),
                           "target": target, "value": value, "unlocked": unlocked.get(aid)})
         return {"items": items, "loaded": best is not None, "play": self._cfg.get("play", {}),
+                "play_time": core.play_time(),
                 "categories": [[c, t(*n)] for c, n in achievements.CATEGORIES]}
 
     # -- cheats

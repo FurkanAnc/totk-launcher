@@ -36,9 +36,9 @@ little it needs for the button icons is read from your own installation.
 
 ## Features
 
-- **Home**: the installed version, graphics card and mods in one line, the frame rate of your last session (average
-  and 1% low, from the game's own log), your total play time and a note when a newer recomp or launcher is out. The
-  mods switch is in the sidebar on every page.
+- **Home**: one table with your play time (the game's own, read from your most played save), your last session (with
+  its average and 1% low frame rate from the game's log), the game and recomp versions (with a note when a newer recomp
+  or launcher is out), the graphics card and your mods. The mods switch is in the sidebar on every page.
 - **Themes**: Light (default) or Night, in Settings > Launcher.
 - **Settings**: frame rate, display, picture and camera, language, sound and input options, written to `totk.ini`
   without touching its comments (a backup is taken before every save). The options of recomp 0.2.8 are there too:
@@ -56,8 +56,8 @@ little it needs for the button icons is read from your own installation.
 - **Achievements**: 55 achievements in five categories (story, exploration, collection, combat, hero), read from
   your saves after every session: temples, shrines, Lightroots, Korok seeds, caves, wells, bosses, Lynels, Flurry
   Rushes, the Compendium and more. A popup shows new ones; saves from the prologue do not count. Your play time is
-  added up from the game's log after every session.
-- **Saves**: what each save slot holds (saved time, hearts, stamina, battery, rupees), automatic backup before every
+  shown too.
+- **Saves**: what each save slot holds (saved time, hearts, stamina, battery, rupees, play time), automatic backup before every
   launch, manual backups, restore.
 - **Cheats**: rupees, hearts, stamina wheels and battery cells in a save slot (while the game is closed).
 

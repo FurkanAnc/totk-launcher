@@ -222,34 +222,36 @@ const played = (play) => (play && play.seconds > 0
 
 PAGES.home = async () => {
   const d = await api().home();
-  const facts = [
-    d.exe ? `<span class="ok">totk.exe ✓</span>` : `<span class="bad">totk.exe ${esc(S.not_found)}</span>`,
-    `<span>${esc(d.version)}</span>`,
-    `<span>${esc(d.gpu || S.unknown)}</span>`,
-    `<span>${esc(S.mods)}: ${d.mods} (${esc(d.mods_on ? S.on : S.off)})</span>`,
-    `<span>romfs-patches: ${d.patches}</span>`,
-  ].join("");
   const ss = d.session;
-  const session = ss ? `<p class="session"><b>${esc(S.last_session)}</b> · ${esc(d.last)} · ${duration(ss.seconds)}, ${num(ss.frames)} ${esc(S.frames)}
-      · ${esc(S.avg_fps)} <em>${num(ss.mean, 1)} FPS</em> · ${esc(S.low_fps)} ${num(ss.low, 1)} FPS</p>`
-    : `<p class="session">${esc(S.last_start)}: ${esc(d.last || "—")}</p>`;
-  const total = played(d.play);
+  const cell = (label, value, note = "", id = "") =>
+    `<div class="fact"${id ? ` id="${id}"` : ""}><span>${esc(label)}</span><b>${value}</b><small>${note}</small></div>`;
+  const sessions = d.play && d.play.sessions ? ` · ${num(d.play.sessions)} ${esc(S.sessions)}` : "";
+  const board = [
+    cell(S.play_time, d.play_time ? esc(duration(d.play_time)) : esc(S.no_play), d.play_time ? esc(S.from_save) + sessions : sessions.slice(3)),
+    cell(S.last_session, esc(d.last || "—"), ss ? `${esc(duration(ss.seconds))} · ${esc(S.fps_avg)} <em>${num(ss.mean, 1)} FPS</em> · ${esc(S.low_fps)} ${num(ss.low, 1)}` : ""),
+    cell(S.game_ver, esc(d.game_version || "?"), d.exe ? `<i class="ok">totk.exe ✓</i>` : `<i class="bad">totk.exe ${esc(S.not_found)}</i>`),
+    cell(S.recomp_ver, esc(d.recomp || "?"), esc(d.recomp_build || ""), "recompcell"),
+    cell(S.gpu, esc((d.gpu || S.unknown).replace(/\s*\((TM|R)\)/gi, "")), "", "gpucell"),
+    cell(S.mods, `${d.mods} ${esc(S.files)}`, `${esc(d.mods_on ? S.on : S.off)} · romfs-patches: ${d.patches}`),
+  ].join("");
   return {
     html: `<h1 class="home-title">${esc(S.game_title)}</h1>
-      <div class="facts">${facts}</div>
-      ${session}
-      ${total ? `<p class="session"><b>${esc(S.play_time)}</b> · ${esc(total)}</p>` : ""}
+      <div class="board">${board}</div>
       <div class="updates" id="updates"></div>
       <div class="launch"><span class="playstate"><i></i><em></em></span><button type="button" class="play-button" data-play></button></div>`,
     after(p) {
       $$("[data-play]", p).forEach((b) => b.addEventListener("click", play));
       showState(STATE);
       api().updates().then((u) => {
-        const box = $("#updates", p); if (!box || !u) return;
-        box.innerHTML = [["recomp", S.update_recomp], ["launcher", S.update_launcher]].filter(([k]) => u[k]).map(([k, label]) =>
-          `<div class="update-note"><b>${esc(label)}: ${esc(u[k].tag)}</b><span>${esc(S.update_have)} ${esc(u[k].have)}</span>
-            <a class="link" data-url="${esc(u[k].url)}">${esc(S.release_notes)}</a></div>`).join("");
-        $$("[data-url]", box).forEach((a) => a.addEventListener("click", () => api().open_url(a.dataset.url)));
+        if (!u) return;
+        const rc = $("#recompcell small", p);
+        if (rc) rc.innerHTML = u.recomp
+          ? `<i class="new">${esc(u.recomp.tag)} ${esc(S.available)}</i> · <a class="link" data-url="${esc(u.recomp.url)}">${esc(S.release_notes)}</a>`
+          : `${esc(d.recomp_build || "")}${d.recomp_build ? " · " : ""}${esc(S.up_to_date)}`;
+        const box = $("#updates", p);
+        if (box && u.launcher) box.innerHTML = `<p>${esc(S.update_launcher)}: <b>${esc(u.launcher.tag)}</b> (${esc(S.update_have)} ${esc(u.launcher.have)})
+          · <a class="link" data-url="${esc(u.launcher.url)}">${esc(S.release_notes)}</a></p>`;
+        $$("[data-url]", p).forEach((a) => a.addEventListener("click", () => api().open_url(a.dataset.url)));
       }).catch(() => {});
     },
   };
@@ -488,9 +490,9 @@ PAGES.saves = async () => {
     html: `${pageHeader(S.saves, S.saves_sub)}
       ${d.slots.length ? section(S.slots, S.slots_sub, `<div class="slot-table">
         <div class="head"></div><div class="head">${esc(S.saved_at)}</div><div class="head">${esc(S.hearts_s)}</div>
-        <div class="head">${esc(S.stamina_s)}</div><div class="head">${esc(S.battery_s)}</div><div class="head">${esc(S.rupees_s)}</div>
+        <div class="head">${esc(S.stamina_s)}</div><div class="head">${esc(S.battery_s)}</div><div class="head">${esc(S.rupees_s)}</div><div class="head">${esc(S.play_time)}</div>
         ${d.slots.map((x) => `<div class="name">${esc(x.name)}</div><div>${esc(x.time)}</div><div>${x.hearts ?? "—"}</div>
-          <div>${x.stamina == null ? "—" : num(x.stamina, x.stamina % 1 ? 1 : 0)}</div><div>${x.battery ?? "—"}</div><div>${x.rupee == null ? "—" : num(x.rupee)}</div>`).join("")}
+          <div>${x.stamina == null ? "—" : num(x.stamina, x.stamina % 1 ? 1 : 0)}</div><div>${x.battery ?? "—"}</div><div>${x.rupee == null ? "—" : num(x.rupee)}</div><div>${x.playtime ? esc(duration(x.playtime)) : "—"}</div>`).join("")}
       </div>`) : ""}
       ${section(S.auto_backup, "", field(S.backup_on_play, S.backup_on_play_hint, toggle(c.backup_before_play, 'id="bop"'))
         + field(S.keep, S.keep_hint, `<input class="number-input" type="number" id="keep" min="1" max="100" value="${c.backup_keep}">`)
@@ -531,7 +533,7 @@ PAGES.achievements = async () => {
     html: `${pageHeader(S.achievements, S.ach_sub)}
       <div class="achievement-summary"><div class="progress-ring"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19"/><circle class="ring-value" cx="22" cy="22" r="19" pathLength="100" stroke-dasharray="${pct} 100"/></svg><strong>${pct}%</strong></div>
         <div><span>${esc(S.overall)}</span><h2>${done} <small>/ ${total}</small></h2><div class="wide-progress"><i style="width:${pct}%"></i></div>
-          ${played(d.play) ? `<div class="played">${esc(S.play_time)}: ${esc(played(d.play))}</div>` : ""}</div>
+          ${d.play_time ? `<div class="played">${esc(S.play_time)}: ${esc(duration(d.play_time))}</div>` : ""}</div>
         ${button(S.check_now, { attrs: 'id="check"' })}</div>
       <div class="filter-bar" id="filter">${[["all", S.all], ...d.categories, ["locked", S.locked]].map(([v, l]) => `<button type="button" data-v="${v}" class="${v === ACH_FILTER ? "active" : ""}">${esc(l)}</button>`).join("")}</div>
       <div class="achievement-grid">${shown.map(card).join("")}</div>

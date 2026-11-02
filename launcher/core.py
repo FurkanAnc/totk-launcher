@@ -278,6 +278,24 @@ def cheats():
 LIFE = "PlayerStatus.Life"
 
 
+PLAYTIME = 0xE573F564   # progress.sav: the play time in seconds (UInt), as read by the TotK savegame editor
+T_UINT = 20
+
+
+def slot_playtime(slot: Path) -> int | None:
+    try:
+        data = (slot / "progress.sav").read_bytes()
+        kind, off = _sav_index(data).get(PLAYTIME, (None, None))
+    except (OSError, ValueError):
+        return None
+    return struct.unpack_from("<I", data, off)[0] if kind == T_UINT else None
+
+
+def play_time() -> int:
+    """The game's own play time of the most played save slot, in seconds (0 without saves)."""
+    return max((s for s in map(slot_playtime, save_slots()) if s), default=0)
+
+
 def slot_summary(slot: Path) -> dict:
     """Saved time and the player's values of one slot, for the Saves page."""
     when = (slot / "progress.sav").stat().st_mtime
@@ -286,7 +304,7 @@ def slot_summary(slot: Path) -> dict:
     except (OSError, ValueError):
         v = {}
     return {"name": slot.name, "time": when, "hearts": v.get("hearts"), "stamina": v.get("stamina"),
-            "battery": v.get("battery"), "rupee": v.get("rupee")}
+            "battery": v.get("battery"), "rupee": v.get("rupee"), "playtime": slot_playtime(slot)}
 
 
 def save_slots() -> list[Path]:
@@ -537,6 +555,15 @@ def installed_release() -> str:
         return json.loads((ROOT / "totk-install.json").read_text(encoding="utf-8")).get("release", "").split("+")[0]
     except (OSError, ValueError):
         return ""
+
+
+def installed_build() -> str:
+    """The commit after the release number in totk-install.json (0.1.1+701bd62 -> 701bd62)."""
+    try:
+        rel = json.loads((ROOT / "totk-install.json").read_text(encoding="utf-8")).get("release", "")
+    except (OSError, ValueError):
+        return ""
+    return rel.split("+", 1)[1] if "+" in rel else ""
 
 
 def latest_release(repo: str) -> dict | None:
