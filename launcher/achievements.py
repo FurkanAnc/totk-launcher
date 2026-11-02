@@ -156,6 +156,7 @@ def stats(save: Save) -> dict[str, float]:
                   "MemoryOfTheDragon", "HyruleCastleIncident", "MainChallenge"):
         s["q_" + quest] = 1 if save.is_("Step_" + quest) else 0
     s["game_clear"] = 1 if save.is_("IsGameClear", True) or save.is_("Step_DefeatGanondorf") else 0
+    s["paraglider"] = 1 if save.is_("IsGet.Parasail", True) else 0   # the end of the Great Sky Island
 
     # play time, stables, Great Fairies, horses, pouches, armour, Autobuild
     s["play_hours"] = (save.u32(0xE573F564) or 0) / 3600
@@ -193,6 +194,9 @@ CATEGORIES = [(STORY, ("Story", "Hikâye")), (EXPLORE, ("Exploration", "Keşif")
 
 ACHIEVEMENTS = [
     # story
+    ("q_paraglider", STORY, "☁", ("Ready to Glide", "Süzülmeye Hazır"),
+     ("Finish the Great Sky Island and get the paraglider.", "Gökyüzü Adası'nı bitir ve paraşütü al."),
+     "paraglider", 1),
     ("q_wind", STORY, "✦", ("Wind Temple", "Rüzgâr Tapınağı"),
      ("Clear the Wind Temple with Tulin.", "Tulin ile Rüzgâr Tapınağı'nı tamamla."), "q_SageOfWind", 1),
     ("q_fire", STORY, "✦", ("Fire Temple", "Ateş Tapınağı"),

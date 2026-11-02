@@ -19,7 +19,7 @@ are the Switch ones. TotK Launcher puts all of that in one place:
 - rebind every button on keyboard, mouse and controller,
 - see **your own keys** in the game instead of A / B / X / Y, the action prompt in the corner included,
 - keep several mods side by side and switch each one on or off,
-- track 73 achievements read from your saves, and your play time,
+- track 74 achievements read from your saves, and your play time,
 - back up and restore saves, and tweak rupees, hearts, stamina, battery, Poes, Pony Points, pouch slots and item
   counts, or repair your equipment,
 - hear about a new recomp or launcher release.
@@ -54,10 +54,10 @@ little it needs for the button icons is read from your own installation.
 - **Button prompts**: the in-game button icons can show your **keyboard and mouse** keys (drawn from your bindings,
   the action prompt in the corner included), the original **Switch** icons, or the icons of a font mod in
   `romfs_mods`.
-- **Achievements**: 73 achievements in five categories (story, exploration, collection, combat, hero), read from
-  your saves after every session: temples, shrines, Lightroots, Korok seeds, caves, wells, stables, Great Fairies,
-  bosses, Lynels, Like Likes, Flurry Rushes, armour upgrades, pouch slots, horses, Autobuild favourites, the
-  Compendium, play time and more. A popup shows new ones; saves from the prologue do not count. Your play time is
+- **Achievements**: 74 achievements in five categories (story, exploration, collection, combat, hero), read from
+  your saves after every session: the end of the Great Sky Island, temples, shrines, Lightroots, Korok seeds, caves,
+  wells, stables, Great Fairies, bosses, Lynels, Like Likes, Flurry Rushes, armour upgrades, pouch slots, horses,
+  Autobuild favourites, the Compendium, play time and more. A popup shows new ones; saves from the prologue do not count. Your play time is
   shown too.
 - **Saves**: what each save slot holds (saved time, hearts, stamina, battery, rupees, play time), automatic backup before every
   launch, manual backups, restore.
@@ -128,7 +128,7 @@ and `i18n.py`.
 ## Türkçe
 
 Tears of the Kingdom PC recomp için launcher: ayarlar (recomp 0.2.8'in görüş alanı, renk ve görüntü oranı ayarları dahil),
-tuş atama, oyunda klavye/fare tuş simgeleri (aksiyon simgesi dahil), tek tek açılıp kapatılabilen mod listesi, 73
+tuş atama, oyunda klavye/fare tuş simgeleri (aksiyon simgesi dahil), tek tek açılıp kapatılabilen mod listesi, 74
 başarım, oynama süresi, kayıt yuvası bilgisi, kayıt yedekleme, hileler (Poe, Pony Points, çanta yuvaları, malzeme
 miktarı, ekipman onarma dahil) ve yeni sürüm bildirimi. Açık ve gece teması
 var. [Son sürümden](https://github.com/FurkanAnc/totk-launcher/releases/latest)
