@@ -34,6 +34,43 @@ def strings() -> dict:
     return {k: t(*v) for k, v in {
         "home": ("Home", "Ana sayfa"), "settings": ("Settings", "Ayarlar"), "controls": ("Controls", "Kontroller"),
         "mods_page": ("Mods", "Modlar"),
+        "collect_page": ("Collectibles", "Toplanabilirler"),
+        "collect_sub": ("What the save still misses, with where it is. Positions come from the TotK savegame editor; X runs "
+                        "west to east, Z north to south, and the height is in metres. Click a row or a dot to copy its "
+                        "position.",
+                        "Kayıtta henüz eksik olanlar ve yerleri. Konumlar TotK kayıt editöründen; X batıdan doğuya, Z "
+                        "kuzeyden güneye gider, yükseklik metre. Konumunu kopyalamak için bir satıra ya da noktaya "
+                        "tıklayın."),
+        "missing_n": ("missing", "eksik"), "found_n": ("found", "bulundu"), "all_found": ("All found.", "Hepsi bulundu."),
+        "no_place": ("no position", "konum yok"), "height": ("height", "yükseklik"),
+        "copied": ("Copied", "Kopyalandı"), "more_rows": ("more", "tane daha"),
+        "update_btn": ("Update…", "Güncelle…"),
+        "update_title": ("Update the recomp?", "Recomp güncellensin mi?"),
+        "update_body": ("The launcher downloads the setup from the recomp's GitHub release and opens it. In the setup, "
+                        "choose your game folder as the install folder (it is copied to the clipboard); your saves and "
+                        "totk.ini are kept, and totk.exe is built again, which takes a while. Download:",
+                        "Launcher kurulum programını recomp'un GitHub sürümünden indirip açar. Kurulumda kurulum klasörü "
+                        "olarak oyun klasörünü seçin (panoya kopyalanır); kayıtlar ve totk.ini korunur, totk.exe yeniden "
+                        "derlenir, bu biraz sürer. İndirilecek:"),
+        "downloading": ("Downloading", "İndiriliyor"),
+        "update_ready": ("The setup is open. Choose this folder as the install folder (copied to the clipboard):",
+                         "Kurulum açıldı. Kurulum klasörü olarak bu klasörü seçin (panoya kopyalandı):"),
+        "ok": ("OK", "Tamam"),
+        "crash_title": ("The game crashed", "Oyun çöktü"),
+        "crash_body": ("A copy of its log is kept in launcher\\crash-reports, because the next start overwrites it. "
+                       "The report opens the recomp's crash form with the version, your graphics card and the end of "
+                       "the log filled in; add what you were doing and attach the log file.",
+                       "Log'un bir kopyası launcher\\crash-reports klasöründe saklandı, çünkü bir sonraki açılış onu "
+                       "siler. Rapor, recomp'un çökme formunu sürüm, ekran kartı ve log'un sonu doldurulmuş olarak "
+                       "açar; ne yaptığınızı ekleyin ve log dosyasını iliştirin."),
+        "report_open": ("Open the crash form", "Çökme formunu aç"), "report_copy": ("Copy the report", "Raporu kopyala"),
+        "crash_logs": ("Crash logs", "Çökme logları"), "close": ("Close", "Kapat"),
+        "report_problem": ("Report a problem", "Sorun bildir"),
+        "report_hint": ("The recomp's crash form, filled in from the last game log.",
+                        "Son oyun log'undan doldurulmuş recomp çökme formu."),
+        "no_crash": ("The last log has no crash report; the form still gets the version, graphics card and the end "
+                     "of the log.", "Son log'da çökme raporu yok; form yine de sürümü, ekran kartını ve log'un sonunu "
+                     "alır."),
         "mods_sub": ("romfs_mods and the mods in the mods folder next to totk.exe (one folder per mod) are combined "
                      "when you press PLAY. A mod lower in the list wins when two change the same file; your "
                      "romfs_mods folder is never changed.",
@@ -326,6 +363,12 @@ class Api:
                     time.sleep(1.5)   # the game writes its last log lines while it closes
                     if core.count_session(self._cfg):
                         core.save_config(self._cfg)
+                    code = self._proc.poll() if self._proc is not None else None
+                    kept = core.keep_crash_log()
+                    if kept or code not in (None, 0):
+                        r = core.crash_report(kept)
+                        self._push({"type": "crash", "summary": r["summary"] or t(f"exit code {code}",
+                                                                                f"çıkış kodu {code}")})
                 self._running = on
             time.sleep(2.5)
 
@@ -362,6 +405,69 @@ class Api:
         if str(url).startswith("https://github.com/"):
             os.startfile(url)
         return True
+
+    # -- collectibles
+    def collectibles(self, slot=None):
+        slots = core.save_slots()
+        if not slots:
+            return {"slots": [], "kinds": []}
+        chosen = next((s for s in slots if str(s) == slot), slots[0])
+        fmt = t("%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M")
+        return {"slots": [{"id": str(s), "label": f"{s.name} · {time.strftime(fmt, time.localtime((s / 'progress.sav').stat().st_mtime))}"}
+                          for s in slots], "slot": str(chosen), "kinds": core.collectibles(chosen)}
+
+    # -- recomp update
+    def update_info(self):
+        """The newer recomp release with its setup download, or None."""
+        u = self.updates().get("recomp")
+        if u and not u.get("setup"):   # an answer cached before the launcher kept the download
+            fresh = core.latest_release(core.RECOMP_REPO)
+            u = {**u, **(fresh or {})}
+        return u
+
+    def update_recomp(self):
+        if self._running or core.game_running():
+            return {"ok": False, "message": t("Close the game first.", "Önce oyunu kapatın.")}
+        rel = self.update_info()
+        if not rel or not rel.get("setup"):
+            return {"ok": False, "message": t("No setup to download.", "İndirilecek kurulum yok.")}
+        threading.Thread(target=self._update, args=(rel,), daemon=True).start()
+        return {"ok": True}
+
+    def _update(self, rel):
+        last = [0.0]
+
+        def progress(done, total):
+            if time.time() - last[0] > 0.5 or done == total:
+                last[0] = time.time()
+                self._push({"type": "update", "done": done, "total": total})
+        try:
+            exe = core.download_setup(rel, progress)
+            os.startfile(exe)
+            self._push({"type": "update_ready", "folder": str(ROOT)})
+        except Exception as e:  # noqa: BLE001 - shown on the page
+            self.log(f"update: {e!r}")
+            self._push({"type": "toast", "message": t(f"The update failed: {e}", f"Güncelleme başarısız: {e}")})
+            self._push({"type": "update", "done": 0, "total": 0})
+
+    # -- crash reports
+    def crash_report(self):
+        """The last kept crash log (or the game log) as the recomp's crash form: text, and the form's address."""
+        import urllib.parse
+        kept = sorted(core.CRASHES.glob("totk-*.log"))
+        latest = kept[-1] if kept and (not core.GAME_LOG.exists()
+                                       or kept[-1].stat().st_mtime >= core.GAME_LOG.stat().st_mtime - 5) else None
+        r = core.crash_report(latest)
+        log = r["log"]
+        while True:   # keep the address short enough for a browser
+            q = urllib.parse.urlencode({"template": "1-crash.yml",
+                                        "title": f"Crash: {r['summary'][:90]}" if r["summary"] else "Crash",
+                                        "version": r["version"], "system": r["system"], "log": "```\n" + log + "\n```"})
+            if len(q) < 7000 or len(log) < 200:
+                break
+            log = log[len(log) // 5:]
+        r["url"] = f"https://github.com/{core.RECOMP_REPO}/issues/new?{q}"
+        return r
 
     # -- mods
     def mods(self):
@@ -541,7 +647,7 @@ class Api:
 
     def open_folder(self, which):
         folder = {"logs": core.LOGS, "game": ROOT, "saves": core.SAVE, "backups": core.SAVE_BACKUPS,
-                  "mods": core.LIBRARY}[which]
+                  "mods": core.LIBRARY, "crashes": core.CRASHES}[which]
         folder.mkdir(parents=True, exist_ok=True)
         os.startfile(folder)
 

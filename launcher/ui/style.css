@@ -461,3 +461,30 @@ nav button.active::before { background: var(--green-dark); border-color: var(--g
 [data-theme="night"] .fact > small i.new { color: #e9b25c; }
 .updates p { margin: 12px 2px 0; font-size: 13px; color: var(--muted); }
 #gpucell > b { font-size: 17px; white-space: normal; overflow: visible; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* Collectibles: a plain grid of the land (no game map), dots for what is missing and found, and the list */
+.cl-top { display: flex; justify-content: flex-end; margin: -8px 0 10px; }
+.cl-top select { max-width: 320px; }
+.filter-bar button small { font-family: var(--font); font-size: 11.5px; font-weight: 700; color: var(--faint); margin-left: 3px; }
+.cl-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; padding: 12px 0 8px; }
+.cl-map svg { width: 100%; display: block; }
+.cl-map rect { fill: var(--paper); stroke: var(--green-dark); stroke-width: 30; }
+.cl-map .grid line { stroke: var(--line); stroke-width: 12; }
+.cl-map text { font-family: var(--display); font-size: 420px; font-weight: 800; fill: var(--plate-line); }
+.cl-map circle { cursor: pointer; }
+.cl-map circle.miss { fill: var(--danger); stroke: var(--paper); stroke-width: 10; }
+.cl-map circle.done { fill: var(--plate-line); opacity: .55; }
+.cl-map circle:hover { stroke: var(--ink); stroke-width: 24; }
+.cl-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.cl-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+.cl-legend i.miss { background: var(--danger); }
+.cl-legend i.done { background: var(--plate-line); }
+.cl-list { max-height: 470px; overflow-y: auto; padding-right: 4px; }
+.cl-row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 4px; border-bottom: 1px solid var(--row-line); cursor: pointer; }
+.cl-row:hover { background: var(--hover); }
+.cl-row b { font-family: var(--display); font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cl-row span { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.dialog.wide { width: 560px; }
+.dialog .crash-line { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; color: var(--danger);
+  background: var(--paper); border: 1.5px solid var(--edge); padding: 8px 10px; word-break: break-all; }
+.dialog > div:last-child { flex-wrap: wrap; }

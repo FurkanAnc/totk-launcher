@@ -711,7 +711,10 @@ def latest_release(repo: str) -> dict | None:
     try:
         with urllib.request.urlopen(req, timeout=8) as r:
             d = json.loads(r.read().decode("utf-8"))
-        return {"tag": d["tag_name"], "url": d["html_url"]}
+        setup = next((a for a in d.get("assets", []) if a["name"].lower().endswith("-windows.zip")), None)
+        return {"tag": d["tag_name"], "url": d["html_url"],
+                "setup": {"name": setup["name"], "url": setup["browser_download_url"], "size": setup["size"]}
+                if setup else None}
     except Exception:  # noqa: BLE001 - offline or rate limited: no notice
         return None
 
@@ -730,6 +733,151 @@ def check_updates(cfg: dict, max_age: float = 6 * 3600) -> dict:
         newer = rel and have[k] and _version(rel["tag"]) > _version(have[k])
         out[k] = {**rel, "have": have[k]} if newer else None
     return out
+
+
+SETUP_DIR = APP / "rt" / "recomp-setup"
+
+
+def download_setup(rel: dict, progress) -> Path:
+    """Downloads and unpacks the recomp's Windows setup of a release; returns TotK-Setup.exe. progress(done, total)."""
+    import urllib.request
+    import zipfile
+    setup = rel["setup"]
+    if not setup["url"].startswith("https://github.com/valentderah/totk-pc-recomp/releases/download/"):
+        raise ValueError("unexpected download address")
+    folder = SETUP_DIR / rel["tag"]
+    exe = next(folder.rglob("TotK-Setup.exe"), None) if folder.is_dir() else None
+    if exe:
+        return exe
+    SETUP_DIR.mkdir(parents=True, exist_ok=True)
+    part = SETUP_DIR / (setup["name"] + ".part")
+    req = urllib.request.Request(setup["url"], headers={"User-Agent": "totk-launcher"})
+    with urllib.request.urlopen(req, timeout=30) as r, part.open("wb") as f:
+        total, done = int(r.headers.get("Content-Length") or setup["size"]), 0
+        while chunk := r.read(1 << 20):
+            f.write(chunk)
+            done += len(chunk)
+            progress(done, total)
+    if done != total:
+        raise OSError(f"download incomplete: {done} of {total} bytes")
+    if folder.exists():
+        shutil.rmtree(folder)
+    with zipfile.ZipFile(part) as z:
+        for member in z.namelist():   # stay inside the folder
+            if member.startswith(("/", "\\")) or ".." in Path(member).parts:
+                raise ValueError(f"unsafe path in the archive: {member}")
+        z.extractall(folder)
+    part.unlink()
+    exe = next(folder.rglob("TotK-Setup.exe"), None)
+    if not exe:
+        raise FileNotFoundError("TotK-Setup.exe is not in the download")
+    return exe
+
+
+# --------------------------------------------------------------------------- collectibles: what is still missing
+def collectibles(slot: Path) -> list[dict]:
+    """Per kind: done, total, and every item with its place (from the TotK savegame editor's coordinates) and
+    whether this slot has it."""
+    import achievements
+    d = achievements.data()
+    lists, places = d["lists"], d["places"]
+    save = achievements.Save(slot / "progress.sav")
+    clear, open_ = murmur3("Clear"), murmur3("Open")
+
+    def pretty(name: str, kind: str) -> str:
+        name = re.sub(r"^(Cave|Well|DeepHole)_", "", name).replace("_", " ")
+        name = re.sub(r"\b0*(\d+)\b", r"\1", name)
+        return re.sub(r"\s0$", "", name).strip() or kind
+
+    kinds = [
+        ("shrines", t("Shrines", "Tapınaklar"), "shrines_status", clear),
+        ("lightroots", t("Lightroots", "Lightroot'lar"), "lightroots_status", open_),
+        ("towers", t("Skyview Towers", "Skyview Kuleleri"), "towers_activated", 1),
+        ("caves", t("Caves", "Mağaralar"), "location_caves_visited", 1),
+        ("wells", t("Wells", "Kuyular"), "location_wells_visited", 1),
+        ("chasms", t("Chasms", "Uçurumlar"), "location_chasms_visited", 1),
+        ("bubbuls", t("Bubbul Frogs", "Bubbul kurbağaları"), "bubbuls_defeated", 1),
+        ("koroks_hidden", t("Koroks (hidden)", "Koroklar (saklı)"), "koroks_hidden", 1),
+        ("koroks_carry", t("Koroks (carry)", "Koroklar (taşıma)"), "koroks_carry", clear),
+    ]
+    out = []
+    for key, label, list_name, want in kinds:
+        items = []
+        for i, flag in enumerate(lists[list_name]):
+            place = places[key][i] if i < len(places[key]) else [None, None, None]
+            name = place[3] if len(place) > 3 else ""
+            name = pretty(name, "") if name else ""
+            if name.isdigit():
+                name = t("Well", "Kuyu") + " " + name
+            items.append({"n": i + 1, "name": name, "x": place[0], "y": place[1],
+                          "z": place[2], "done": save.values.get(flag) == want})
+        out.append({"key": key, "label": label, "total": len(items), "done": sum(it["done"] for it in items),
+                    "items": items})
+    return out
+
+
+# --------------------------------------------------------------------------- crashes
+CRASHES = APP / "crash-reports"
+CRASH_RE = re.compile(r"^\s*(FATAL|fatal)[: ]")
+
+
+def crash_lines(lines: list[str]) -> list[str]:
+    return [line for line in lines if CRASH_RE.match(line)]
+
+
+def keep_crash_log() -> Path | None:
+    """The game overwrites its log at the next start: a copy of a log that ends in a crash report."""
+    try:
+        text = GAME_LOG.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    if not crash_lines(text.splitlines()[-400:]):
+        return None
+    CRASHES.mkdir(parents=True, exist_ok=True)
+    dst = CRASHES / time.strftime("totk-%Y%m%d-%H%M%S.log", time.localtime(GAME_LOG.stat().st_mtime))
+    if not dst.exists():
+        dst.write_text(text, encoding="utf-8")
+    for old in sorted(CRASHES.glob("totk-*.log"))[:-10]:
+        old.unlink(missing_ok=True)
+    return dst
+
+
+def _redact(text: str) -> str:
+    """No user name or home folder in a report that goes on the web."""
+    home = os.path.expanduser("~")
+    user = os.environ.get("USERNAME", "")
+    text = text.replace(home, "%USERPROFILE%").replace(home.replace("\\", "/"), "%USERPROFILE%")
+    if len(user) > 2:
+        text = re.sub(re.escape(user), "<user>", text, flags=re.I)
+    return text
+
+
+def crash_report(log_path: Path | None = None) -> dict:
+    """The facts the recomp's crash issue form asks for, from the last log (or a kept crash log)."""
+    import platform
+    path = log_path or GAME_LOG
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        lines = []
+    fatal = crash_lines(lines)
+    if fatal:   # the crash report and what led to it
+        at = max(i for i, line in enumerate(lines) if CRASH_RE.match(line))
+        excerpt = lines[max(0, at - 40):at + 25]
+    else:
+        excerpt = lines[-60:]
+    gpu = log_fact(r"vk: using gpu \d+: (.+)")
+    driver = log_fact(r"vk: driver[^:]*:\s*(.+)") or log_fact(r"driver (?:version )?([\d.]+.*)")
+    try:
+        inst = json.loads((ROOT / "totk-install.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        inst = {}
+    version = f"TotK Recomp {inst.get('release', '?')}, game {inst.get('version', '?')}"
+    system = f"{gpu or '?'}{', driver ' + driver if driver else ''}; Windows {platform.version()}"
+    log = _redact("\n".join(excerpt))
+    return {"crashed": bool(fatal), "summary": _redact(fatal[-1].strip()) if fatal else "", "version": version,
+            "system": _redact(system), "log": log, "log_file": str(path),
+            "text": _redact(f"Version: {version}\nSystem: {system}\n\nLog ({path.name}):\n{log}")}
 
 
 # --------------------------------------------------------------------------- starting the game

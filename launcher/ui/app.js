@@ -107,6 +107,33 @@ function confirmBox(title, body = "") {
   });
 }
 
+function infoBox(title, body, extra = "") {
+  return new Promise((resolve) => {
+    const d = el(`<div class="dialog-backdrop"><div class="dialog"><h2>${esc(title)}</h2><p>${esc(body)}</p>${extra}
+      <div>${button(S.ok, { variant: "primary", attrs: 'data-v="1"' })}</div></div></div>`);
+    document.body.append(d);
+    const done = () => { d.remove(); resolve(); };
+    $("[data-v]", d).addEventListener("click", done);
+  });
+}
+
+async function crashDialog(title) {
+  const r = await api().crash_report();
+  const d = el(`<div class="dialog-backdrop"><div class="dialog wide"><h2>${esc(title)}</h2>
+    ${r.summary ? `<p class="crash-line">${esc(r.summary)}</p>` : `<p>${esc(S.no_crash)}</p>`}
+    <p>${esc(S.crash_body)}</p>
+    <div>${button(S.crash_logs, { variant: "ghost", attrs: 'data-a="folder"' })}${button(S.report_copy, { attrs: 'data-a="copy"' })}
+      ${button(S.report_open, { variant: "primary", attrs: 'data-a="open"' })}${button(S.close, { variant: "ghost", attrs: 'data-a="close"' })}</div></div></div>`);
+  document.body.append(d);
+  $$("[data-a]", d).forEach((b) => b.addEventListener("click", async () => {
+    const a = b.dataset.a;
+    if (a === "open") api().open_url(r.url);
+    else if (a === "copy") { try { await navigator.clipboard.writeText(r.text); toast(S.copied); } catch (_) {} }
+    else if (a === "folder") api().open_folder("crashes");
+    else d.remove();
+  }));
+}
+
 // ------------------------------------------------------------------ theme
 function applyTheme() {
   const theme = (BOOT && BOOT.cfg.theme) === "night" ? "night" : "light";
@@ -115,8 +142,8 @@ function applyTheme() {
 }
 
 // ------------------------------------------------------------------ shell
-const PAGES_ORDER = ["home", "settings", "controls", "mods", "saves", "achievements", "cheats"];
-const pageName = (p) => (p === "mods" ? S.mods_page : S[p]);
+const PAGES_ORDER = ["home", "settings", "controls", "mods", "collect", "saves", "achievements", "cheats"];
+const pageName = (p) => ({ mods: S.mods_page, collect: S.collect_page }[p] || S[p]);
 const FPS = () => [["30", "30"], ["60", "60"], ["120", "120"], ["144", "144"], ["display", S.monitor]];
 
 function renderShell() {
@@ -183,6 +210,13 @@ async function poll() {
       if (ev.type === "toast") toast(ev.message);
       else if (ev.type === "achievement") unlockPopup(ev);
       else if (ev.type === "achievements_changed") { achCount(); if (PAGE === "achievements" && !CAPTURE) go("achievements", true); }
+      else if (ev.type === "update") updateProgress(ev);
+      else if (ev.type === "update_ready") {
+        UPDATING = false; updateProgress({ done: 0, total: 0 });
+        try { await navigator.clipboard.writeText(ev.folder); } catch (_) {}
+        infoBox(S.update_recomp, `${S.update_ready} ${ev.folder}`);
+      }
+      else if (ev.type === "crash") crashDialog(S.crash_title);
     }
   } catch (e) { /* the window is closing */ }
   setTimeout(poll, 1200);
@@ -207,6 +241,13 @@ async function go(page, keepScroll = false) {
 
 // ------------------------------------------------------------------ pages
 const PAGES = {};
+let UPDATING = false;
+function updateProgress(ev) {
+  const small = $("#recompcell small");
+  if (!small) return;
+  if (ev.total) { UPDATING = true; small.innerHTML = `<i class="new">${esc(S.downloading)} ${Math.floor((100 * ev.done) / ev.total)}%</i>`; }
+  else UPDATING = false;
+}
 
 let LOG_OPEN = false;
 const num = (v, digits = 0) => Number(v).toLocaleString(BOOT.lang, { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -245,9 +286,19 @@ PAGES.home = async () => {
       api().updates().then((u) => {
         if (!u) return;
         const rc = $("#recompcell small", p);
-        if (rc) rc.innerHTML = u.recomp
-          ? `<i class="new">${esc(u.recomp.tag)} ${esc(S.available)}</i> · <a class="link" data-url="${esc(u.recomp.url)}">${esc(S.release_notes)}</a>`
+        if (rc && !UPDATING) rc.innerHTML = u.recomp
+          ? `<i class="new">${esc(u.recomp.tag)} ${esc(S.available)}</i> · <a class="link" id="doupdate">${esc(S.update_btn)}</a> · <a class="link" data-url="${esc(u.recomp.url)}">${esc(S.release_notes)}</a>`
           : `${esc(d.recomp_build || "")}${d.recomp_build ? " · " : ""}${esc(S.up_to_date)}`;
+        const up = $("#doupdate", p);
+        if (up) up.addEventListener("click", async () => {
+          const rel = await api().update_info();
+          if (!rel || !rel.setup) return toast(S.update_recomp);
+          const mb = Math.round(rel.setup.size / 1048576);
+          if (!(await confirmBox(S.update_title, `${S.update_body} ${rel.setup.name} (${mb} MB), github.com/valentderah/totk-pc-recomp`))) return;
+          const r = await api().update_recomp();
+          if (!r.ok) return toast(r.message);
+          updateProgress({ done: 0, total: 1 });
+        });
         const box = $("#updates", p);
         if (box && u.launcher) box.innerHTML = `<p>${esc(S.update_launcher)}: <b>${esc(u.launcher.tag)}</b> (${esc(S.update_have)} ${esc(u.launcher.have)})
           · <a class="link" data-url="${esc(u.launcher.url)}">${esc(S.release_notes)}</a></p>`;
@@ -277,7 +328,8 @@ PAGES.settings = async () => {
         + field(S.theme, S.theme_help, select([["light", S.theme_light], ["night", S.theme_night]], BOOT.cfg.theme, 'id="theme"'))
         + field(S.game_folder, S.folder_hint, `<div class="inline-control"><input value="${esc(BOOT.root)}" readonly>${button(S.change, { attrs: 'id="chgame"' })}</div>`)
         + field(S.check_updates, S.check_updates_hint, toggle(BOOT.cfg.check_updates, 'id="checkupd"'))
-        + field(S.shortcut, S.shortcut_hint, button(S.shortcut, { attrs: 'id="shortcut"' })))}
+        + field(S.shortcut, S.shortcut_hint, button(S.shortcut, { attrs: 'id="shortcut"' }))
+        + field(S.report_problem, S.report_hint, button(S.report_problem, { attrs: 'id="report"' })))}
       ${d.groups.map((g) => section(sentence(g.title), "", g.items.map((it) => field(it.label, it.help, control(it))).join(""))).join("")}
       <section class="section log-section">
         <button type="button" class="section-toggle" id="logtoggle"><div><h2>${esc(S.recent_log)}</h2><p>${esc(S.log_sub)}</p></div><span class="${LOG_OPEN ? "rotate" : ""}">${icon("chevron")}</span></button>
@@ -293,6 +345,7 @@ PAGES.settings = async () => {
       $("#openini", p).addEventListener("click", () => api().open_ini());
       $("#checkupd", p).addEventListener("toggle", (e) => { BOOT.cfg.check_updates = e.detail; api().set_option("check_updates", e.detail); });
       $("#shortcut", p).addEventListener("click", async () => toast((await api().shortcut()).message));
+      $("#report", p).addEventListener("click", () => crashDialog(S.report_problem));
       const loadLog = async () => {
         const text = (await api().recent_log()) || S.no_log, log = $("#log", p);
         if (!log) return;
@@ -450,6 +503,42 @@ PAGES.controls = async () => {
       $("#reset", p).addEventListener("click", async () => {
         if (await confirmBox(S.reset_bindings + "?")) { toast((await api().reset_controls()).message); go("controls", true); }
       });
+    },
+  };
+};
+
+let COLLECT_KIND = "shrines", COLLECT_SLOT = null;
+PAGES.collect = async () => {
+  const d = await api().collectibles(COLLECT_SLOT);
+  if (!d.slots.length) return { html: `${pageHeader(S.collect_page, S.collect_sub)}<div class="notice warning"><div><strong>${esc(S.no_save)}</strong></div></div>` };
+  const kind = d.kinds.find((k) => k.key === COLLECT_KIND) || d.kinds[0];
+  const missing = kind.items.filter((it) => !it.done);
+  const pos = (it) => (it.x == null ? S.no_place : `X ${Math.round(it.x)} · Z ${Math.round(it.z)} · ${S.height} ${Math.round(it.y)}`);
+  const label = (it) => it.name || `#${it.n}`;
+  const dots = kind.items.filter((it) => it.x != null).map((it) =>
+    `<circle class="${it.done ? "done" : "miss"}" cx="${it.x}" cy="${it.z}" r="${it.done ? 34 : 52}" data-copy="${Math.round(it.x)}, ${Math.round(it.z)}"><title>${esc(label(it))} · ${esc(pos(it))}</title></circle>`).join("");
+  const grid = [...Array(11).keys()].map((i) => `<line x1="${-5000 + i * 1000}" y1="-4000" x2="${-5000 + i * 1000}" y2="4000"/>`).join("")
+    + [...Array(9).keys()].map((i) => `<line x1="-6000" y1="${-4000 + i * 1000}" x2="6000" y2="${-4000 + i * 1000}"/>`).join("");
+  const shown = missing.slice(0, 300);
+  const rows = shown.map((it) => `<div class="cl-row" data-copy="${it.x == null ? "" : `${Math.round(it.x)}, ${Math.round(it.z)}`}"><b>${esc(label(it))}</b><span>${esc(pos(it))}</span></div>`).join("");
+  return {
+    html: `${pageHeader(S.collect_page, S.collect_sub)}
+      <div class="cl-top">${select(d.slots.map((x) => [x.id, x.label]), d.slot, 'id="clslot"')}</div>
+      <div class="filter-bar" id="clkinds">${d.kinds.map((k) => `<button type="button" data-v="${k.key}" class="${k.key === kind.key ? "active" : ""}">${esc(k.label)} <small>${k.done}/${k.total}</small></button>`).join("")}</div>
+      <section class="section"><div class="cl-grid">
+        <div class="cl-map"><svg viewBox="-6000 -5000 12000 10000" preserveAspectRatio="xMidYMid meet"><rect x="-6000" y="-5000" width="12000" height="10000"/>
+          <g class="grid">${grid}</g><text x="-5850" y="-4650">N</text>${dots}</svg>
+          <div class="cl-legend"><span><i class="miss"></i>${missing.length} ${esc(S.missing_n)}</span><span><i class="done"></i>${kind.done} ${esc(S.found_n)}</span></div></div>
+        <div class="cl-list">${missing.length ? rows : `<p class="empty-note">${esc(S.all_found)}</p>`}
+          ${missing.length > shown.length ? `<p class="credit">+${missing.length - shown.length} ${esc(S.more_rows)}</p>` : ""}</div>
+      </div></section>`,
+    after(p) {
+      $("#clslot", p).addEventListener("change", (e) => { COLLECT_SLOT = e.target.value; go("collect", true); });
+      $$("#clkinds button", p).forEach((b) => b.addEventListener("click", () => { COLLECT_KIND = b.dataset.v; go("collect", true); }));
+      $$("[data-copy]", p).forEach((x) => x.addEventListener("click", async () => {
+        if (!x.dataset.copy) return;
+        try { await navigator.clipboard.writeText(x.dataset.copy); toast(`${S.copied}: ${x.dataset.copy}`); } catch (_) {}
+      }));
     },
   };
 };

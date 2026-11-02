@@ -22,6 +22,8 @@ are the Switch ones. TotK Launcher puts all of that in one place:
 - track 74 achievements read from your saves, and your play time,
 - back up and restore saves, and tweak rupees, hearts, stamina, battery, Poes, Pony Points, pouch slots and item
   counts, or repair your equipment,
+- see what you still miss (shrines, Lightroots, towers, caves, wells, chasms, Bubbul frogs, Koroks) and where,
+- update the recomp with one click and report a crash with the facts the recomp asks for,
 - hear about a new recomp or launcher release.
 
 It runs on Windows 10 and 11, in English or Turkish (Settings > Interface language). It ships **no game files**: the
@@ -57,10 +59,17 @@ little it needs for the button icons is read from your own installation.
 - **Achievements**: 74 achievements in five categories (story, exploration, collection, combat, hero), read from
   your saves after every session: the end of the Great Sky Island, temples, shrines, Lightroots, Korok seeds, caves,
   wells, stables, Great Fairies, bosses, Lynels, Like Likes, Flurry Rushes, armour upgrades, pouch slots, horses,
-  Autobuild favourites, the Compendium, play time and more. A popup shows new ones; saves from the prologue do not count. Your play time is
-  shown too.
-- **Saves**: what each save slot holds (saved time, hearts, stamina, battery, rupees, play time), automatic backup before every
-  launch, manual backups, restore.
+  Autobuild favourites, the Compendium, play time and more. A popup shows new ones; saves from the prologue do not
+  count. Your play time is shown too.
+- **Collectibles**: for a save slot, what is still missing and where (X, Z and height), on a plain grid and in a
+  list: shrines, Lightroots, Skyview Towers, caves, wells, chasms, Bubbul frogs and Koroks. Click to copy a position.
+- **Recomp update**: when a newer recomp is out, Home offers to download its Windows setup from the recomp's GitHub
+  release and open it; you choose your game folder in it (the launcher copies the path for you).
+- **Crash reports**: when the game crashes, the launcher keeps a copy of its log (the next start overwrites it) and
+  opens the recomp's crash form with the version, graphics card and the end of the log filled in, without your user
+  name or home folder. Settings > Report a problem does the same any time.
+- **Saves**: what each save slot holds (saved time, hearts, stamina, battery, rupees, play time), automatic backup
+  before every launch, manual backups, restore.
 - **Cheats** (while the game is closed, with a backup first): rupees, hearts, stamina wheels, battery cells, Poes and
   Pony Points; weapon, bow and shield slots; the stock of Zonaite, crystallized charges, arrows and bomb flowers you
   already have; and a repair that refills the durability of every weapon, bow and shield.
@@ -98,7 +107,8 @@ In the game folder:
 |---|---|
 | `launcher\launcher.json` | launcher options, unlocked achievements and play time |
 | `launcher\ini-backups\` | the last 10 copies of `totk.ini` |
-| `launcher\rt\` | the prompt overlays and the combined mods (safe to delete) |
+| `launcher\rt\` | the prompt overlays, the combined mods and downloaded recomp setups (safe to delete) |
+| `launcher\crash-reports\` | copies of the last 10 game logs that ended in a crash |
 | `mods\` | your mod library, one folder per mod (made when you add a mod) |
 | `profile\launcher-backups\` | save backups |
 
@@ -130,7 +140,8 @@ and `i18n.py`.
 Tears of the Kingdom PC recomp için launcher: ayarlar (recomp 0.2.8'in görüş alanı, renk ve görüntü oranı ayarları dahil),
 tuş atama, oyunda klavye/fare tuş simgeleri (aksiyon simgesi dahil), tek tek açılıp kapatılabilen mod listesi, 74
 başarım, oynama süresi, kayıt yuvası bilgisi, kayıt yedekleme, hileler (Poe, Pony Points, çanta yuvaları, malzeme
-miktarı, ekipman onarma dahil) ve yeni sürüm bildirimi. Açık ve gece teması
+miktarı, ekipman onarma dahil) eksik toplanabilirlerin listesi ve yerleri, tek tıkla recomp güncellemesi, çökme raporu yardımcısı ve yeni sürüm
+bildirimi. Açık ve gece teması
 var. [Son sürümden](https://github.com/FurkanAnc/totk-launcher/releases/latest)
 `TotK Launcher.exe`'yi indirin; `totk.exe`'nin yanına koyun ya da herhangi bir yerden açıp `totk.exe`'yi seçin. Arayüz
 dili Settings > Interface language'dan Türkçe yapılabilir.
@@ -140,7 +151,8 @@ dili Settings > Interface language'dan Türkçe yapılabilir.
 The achievement flag lists (`launcher/achievement_data.json`) come from the
 [Zelda: Tears of the Kingdom savegame editor](https://github.com/marcrobledo/savegame-editors) by Marc Robledo, with
 research by MacSpazzy, Phil, savage13, Karlos007, Echocolat and MrCheeze. MIT License, Copyright (c) 2017-2023 Marc
-Robledo. The weapon durability and armour upgrade tables and the save layout of pouches come from the same editor.
+Robledo. The weapon durability and armour upgrade tables, the save layout of pouches and the collectible positions
+come from the same editor.
 
 Fonts: [Fraunces](https://fonts.google.com/specimen/Fraunces) and
 [Nunito Sans](https://fonts.google.com/specimen/Nunito+Sans), SIL Open Font License (`launcher/ui/fonts`).
