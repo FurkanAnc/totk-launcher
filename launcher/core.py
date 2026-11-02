@@ -1,6 +1,9 @@
-"""The launcher's logic, without any window: totk.ini, saves, cheats, settings schema, starting the game.
+r"""The launcher's logic, without any window: totk.ini, saves, cheats, settings schema, the mod library, play time,
+update checks and starting the game.
 
 The game loads romfs_mods and romfs-patches itself; the launcher only passes environment variables and writes totk.ini.
+Mods in the library (the mods folder next to totk.exe, one folder per mod) are merged with romfs_mods into a copy in
+launcher\rt\mods-src when the game starts; romfs_mods itself is never changed.
 """
 from __future__ import annotations
 
@@ -17,11 +20,14 @@ import prompts
 from i18n import t
 from paths import APP, ROOT
 
+VERSION = "1.3.0"
 EXE = ROOT / "totk.exe"
 INI = ROOT / "totk.ini"
 LOGS = ROOT / "logs"
 GAME_LOG = LOGS / "totk.log"
 MODS = ROOT / "romfs_mods"
+LIBRARY = ROOT / "mods"
+MERGED = APP / "rt" / "mods-src"
 PATCHES = ROOT / "romfs-patches"
 SAVE = ROOT / "profile" / "save"
 SAVE_BACKUPS = ROOT / "profile" / "launcher-backups"
@@ -57,6 +63,9 @@ def load_config() -> dict:
     cfg.setdefault("backup_keep", 10)
     cfg.setdefault("close_on_play", False)
     cfg.setdefault("theme", "light")
+    cfg.setdefault("mods_off", [])
+    cfg.setdefault("check_updates", True)
+    cfg.setdefault("play", {"seconds": 0, "sessions": 0, "counted": []})
     if cfg["theme"] not in ("light", "night"):
         cfg["theme"] = "light"
     cfg.setdefault("achievements", {})
@@ -269,6 +278,17 @@ def cheats():
 LIFE = "PlayerStatus.Life"
 
 
+def slot_summary(slot: Path) -> dict:
+    """Saved time and the player's values of one slot, for the Saves page."""
+    when = (slot / "progress.sav").stat().st_mtime
+    try:
+        v = read_cheats(slot)
+    except (OSError, ValueError):
+        v = {}
+    return {"name": slot.name, "time": when, "hearts": v.get("hearts"), "stamina": v.get("stamina"),
+            "battery": v.get("battery"), "rupee": v.get("rupee")}
+
+
 def save_slots() -> list[Path]:
     """profile/save/<user>/slot_NN folders, most recently saved first."""
     slots = [p.parent for p in SAVE.glob("*/slot_*/progress.sav")]
@@ -366,6 +386,26 @@ def setting_groups():
             ("gpu_index", "display", t("Graphics card", "Ekran kartı"), "gpu", (), "",
              t("The list comes from the last game log.", "Liste son oyun logundan okunur.")),
         ]),
+        (t("PICTURE AND CAMERA", "GÖRÜNTÜ VE KAMERA"), [
+            ("aspect", "display", t("Picture shape", "Görüntü oranı"), "choice", ("fit", "stretch"), "fit",
+             t("When the window's shape differs from the game resolution: fit keeps the shape with black bars, "
+               "stretch fills the window. Recomp 0.2.8 and newer.",
+               "Pencere oranı oyun çözünürlüğünden farklıysa: fit oranı korur ve siyah bant bırakır, stretch "
+               "pencereyi doldurur. Recomp 0.2.8 ve sonrası.")),
+            ("fov", "display", t("Field of view (%)", "Görüş alanı (%)"), "scale", (70, 140), "100",
+             t("100 is the game's own camera; higher shows more around Link. Game 1.4.3, recomp 0.2.8 and newer.",
+               "100 oyunun kendi kamerası; yüksek değer Link'in çevresini daha geniş gösterir. Oyun 1.4.3, recomp "
+               "0.2.8 ve sonrası.")),
+            ("color_preset", "display", t("Colour profile", "Renk profili"), "choice",
+             ("default", "vivid", "clarity", "custom"), "default",
+             t("The four values below are used with custom. Recomp 0.2.8 and newer.",
+               "Aşağıdaki dört değer custom ile kullanılır. Recomp 0.2.8 ve sonrası.")),
+            ("color_brightness", "display", t("Brightness", "Parlaklık"), "scale", (-30, 30), "0", ""),
+            ("color_contrast", "display", t("Contrast (%)", "Kontrast (%)"), "scale", (70, 150), "100", ""),
+            ("color_saturation", "display", t("Saturation (%)", "Doygunluk (%)"), "scale", (50, 200), "100", ""),
+            ("color_gamma", "display", t("Gamma", "Gama"), "scale", (0.8, 1.2, 0.05), "1",
+             t("Below 1 brightens the dark tones.", "1'in altı koyu tonları aydınlatır.")),
+        ]),
         (t("LANGUAGE AND SYSTEM", "DİL VE SİSTEM"), [
             ("lang", "language", t("Game language", "Oyun dili"), "choice", tuple(prompts.MALS_OF_LANG), "en-US",
              t("Translation mods usually replace one language (often en-US).",
@@ -379,11 +419,153 @@ def setting_groups():
              t("On top of the game's own volume.", "Oyunun kendi ses ayarının üstüne.")),
             ("rumble", "input", t("Rumble", "Titreşim"), "bool", (), "1", ""),
             ("motion", "input", t("Motion controls (gyro)", "Hareket kontrolü (jiroskop)"), "bool", (), "1", ""),
+            ("rumble_strength", "input", t("Rumble strength (%)", "Titreşim gücü (%)"), "scale", (0, 300), "130",
+             t("Recomp 0.2.8 and newer.", "Recomp 0.2.8 ve sonrası.")),
+            ("rumble_triggers", "input", t("Trigger rumble (Xbox)", "Tetik titreşimi (Xbox)"), "bool", (), "0",
+             t("Also drives the impulse triggers of an Xbox pad. Recomp 0.2.8 and newer.",
+               "Xbox kumandasının tetik motorlarını da çalıştırır. Recomp 0.2.8 ve sonrası.")),
+            ("stick_deadzone", "input", t("Stick dead zone (%)", "Çubuk ölü bölgesi (%)"), "scale", (0, 50), "8",
+             t("Raise it for a stick that drifts. Recomp 0.2.8 and newer.",
+               "Kendi kendine kayan bir çubuk için yükseltin. Recomp 0.2.8 ve sonrası.")),
         ]),
     ]
 
 
 SECTIONS = {k: sec for _, items in setting_groups() for (k, sec, *_rest) in items}
+
+
+# --------------------------------------------------------------------------- the mod library
+def mod_root(folder: Path) -> Path:
+    """A mod folder holds the game's file tree, directly or in a romfs subfolder (as many mods are shipped)."""
+    return folder / "romfs" if (folder / "romfs").is_dir() else folder
+
+
+def library() -> list[Path]:
+    if not LIBRARY.is_dir():
+        return []
+    return sorted((p for p in LIBRARY.iterdir() if p.is_dir()), key=lambda p: p.name.lower())
+
+
+def mod_sources(cfg: dict) -> list[tuple[str, Path]]:
+    """(name, file tree) of everything that goes into the game: romfs_mods first, then the enabled library mods;
+    a later one wins when two have the same file."""
+    out = [("romfs_mods", MODS)] if MODS.is_dir() else []
+    return out + [(m.name, mod_root(m)) for m in library() if m.name not in cfg.get("mods_off", [])]
+
+
+def mod_list(cfg: dict) -> list[dict]:
+    """The page's list: every source with its file count, size, switch and the files a later mod replaces."""
+    seen: dict[str, str] = {}
+    rows = []
+    entries = [("romfs_mods", MODS, True)] if MODS.is_dir() else []
+    entries += [(m.name, mod_root(m), m.name not in cfg.get("mods_off", [])) for m in library()]
+    for name, root, on in entries:
+        files = mod_files(root)
+        rel = [f.relative_to(root).as_posix() for f in files]
+        over = sorted({seen[r] for r in rel if r in seen}) if on else []
+        if on:
+            seen.update({r: name for r in rel})
+        rows.append({"name": name, "files": len(files), "size": round(sum(f.stat().st_size for f in files) / 1048576, 1),
+                     "on": on, "base": root == MODS, "overrides": over})
+    return rows
+
+
+def merged_mods(cfg: dict) -> Path:
+    """romfs_mods alone, or a merged copy with the enabled library mods (hard links when the drive allows it)."""
+    sources = mod_sources(cfg)
+    if all(root == MODS for _, root in sources):
+        return MODS
+    if MERGED.exists():
+        shutil.rmtree(MERGED)
+    MERGED.mkdir(parents=True)
+    for _, root in sources:
+        for f in mod_files(root):
+            dst = MERGED / f.relative_to(root)
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            if dst.exists():
+                dst.unlink()
+            try:
+                os.link(f, dst)
+            except OSError:
+                shutil.copy2(f, dst)
+    return MERGED
+
+
+def add_mod(folder: Path) -> str:
+    """Copies a mod folder into the library; returns its name there."""
+    LIBRARY.mkdir(parents=True, exist_ok=True)
+    name, n = folder.name, 2
+    while (LIBRARY / name).exists():
+        name, n = f"{folder.name} ({n})", n + 1
+    shutil.copytree(folder, LIBRARY / name)
+    return name
+
+
+# --------------------------------------------------------------------------- play time
+def count_session(cfg: dict) -> bool:
+    """Adds the last run of the game (its frametime line, logs\\totk.log) to the play time once; True when new."""
+    try:
+        stamp = str(GAME_LOG.stat().st_mtime_ns)
+    except OSError:
+        return False
+    play = cfg.setdefault("play", {"seconds": 0, "sessions": 0, "counted": []})
+    if stamp in play["counted"]:
+        return False
+    for line in reversed(log_lines(400)):
+        m = re.search(r"frametime: exit: \d+ frames in ([\d.]+) s", line)
+        if m:
+            play["seconds"] += float(m.group(1))
+            play["sessions"] += 1
+            play["counted"] = (play["counted"] + [stamp])[-50:]
+            return True
+    return False
+
+
+# --------------------------------------------------------------------------- updates
+RECOMP_REPO = "valentderah/totk-pc-recomp"
+LAUNCHER_REPO = "FurkanAnc/totk-launcher"
+
+
+def _version(text: str) -> tuple[int, ...]:
+    m = re.search(r"(\d+(?:\.\d+)*)", text or "")
+    return tuple(int(x) for x in m.group(1).split(".")) if m else ()
+
+
+def installed_release() -> str:
+    """The recomp release the game was built with (totk-install.json), e.g. 0.1.1."""
+    try:
+        return json.loads((ROOT / "totk-install.json").read_text(encoding="utf-8")).get("release", "").split("+")[0]
+    except (OSError, ValueError):
+        return ""
+
+
+def latest_release(repo: str) -> dict | None:
+    """The latest GitHub release of a repository: {"tag", "url"}; None when it cannot be read."""
+    import urllib.request
+    req = urllib.request.Request(f"https://api.github.com/repos/{repo}/releases/latest",
+                                 headers={"Accept": "application/vnd.github+json", "User-Agent": "totk-launcher"})
+    try:
+        with urllib.request.urlopen(req, timeout=8) as r:
+            d = json.loads(r.read().decode("utf-8"))
+        return {"tag": d["tag_name"], "url": d["html_url"]}
+    except Exception:  # noqa: BLE001 - offline or rate limited: no notice
+        return None
+
+
+def check_updates(cfg: dict, max_age: float = 6 * 3600) -> dict:
+    """{"recomp": {...} | None, "launcher": {...} | None}: a newer release than the installed one. Asks GitHub at most
+    every six hours; the answer is kept in launcher.json."""
+    cache = cfg.get("update_cache") or {}
+    if time.time() - cache.get("time", 0) > max_age:
+        cache = {"time": time.time(), "recomp": latest_release(RECOMP_REPO), "launcher": latest_release(LAUNCHER_REPO)}
+        cfg["update_cache"] = cache
+    out = {}
+    have = {"recomp": installed_release(), "launcher": VERSION}
+    for k in ("recomp", "launcher"):
+        rel = cache.get(k)
+        newer = rel and have[k] and _version(rel["tag"]) > _version(have[k])
+        out[k] = {**rel, "have": have[k]} if newer else None
+    return out
 
 
 # --------------------------------------------------------------------------- starting the game
@@ -398,13 +580,21 @@ def game_env(cfg: dict) -> tuple[dict, bool]:
     if not build and not cfg["mods"]:
         EMPTY.mkdir(parents=True, exist_ok=True)
         env["TOTK_ROMFS_MODS"] = str(EMPTY)
+    elif not build:
+        mods = merged_mods(cfg)
+        if mods != MODS:
+            env["TOTK_ROMFS_MODS"] = str(mods)
     return env, build
 
 
 def build_prompts(cfg: dict, env: dict) -> None:
     """Builds the prompt overlays and points env at them (about 10 s the first time)."""
     ini = read_ini()
-    mods, patches = prompts.build_overlay(cfg["prompts"], prompts.parse_binds(ini), cfg["mods"], ini.get("lang"))
+    prompts.MODS = merged_mods(cfg) if cfg["mods"] else MODS   # the overlay starts from the mods in use
+    try:
+        mods, patches = prompts.build_overlay(cfg["prompts"], prompts.parse_binds(ini), cfg["mods"], ini.get("lang"))
+    finally:
+        prompts.MODS = MODS
     env["TOTK_ROMFS_MODS"] = str(mods)
     if patches:
         env["TOTK_ROMFS_PATCHES"] = str(patches)

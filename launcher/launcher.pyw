@@ -32,6 +32,36 @@ def strings() -> dict:
     """Every fixed text of the page, in the current language."""
     return {k: t(*v) for k, v in {
         "home": ("Home", "Ana sayfa"), "settings": ("Settings", "Ayarlar"), "controls": ("Controls", "Kontroller"),
+        "mods_page": ("Mods", "Modlar"),
+        "mods_sub": ("romfs_mods and the mods in the mods folder next to totk.exe (one folder per mod) are combined "
+                     "when you press PLAY. A mod lower in the list wins when two change the same file; your "
+                     "romfs_mods folder is never changed.",
+                     "romfs_mods ve totk.exe'nin yanındaki mods klasöründeki modlar (her mod ayrı klasörde) OYNA'ya "
+                     "basınca birleştirilir. İki mod aynı dosyayı değiştirirse listede alttaki geçerli olur; "
+                     "romfs_mods klasörün hiç değişmez."),
+        "mod_list": ("Installed mods", "Yüklü modlar"), "add_mod": ("Add a mod folder…", "Mod klasörü ekle…"),
+        "mods_folder": ("Mods folder", "Mods klasörü"), "no_mods": ("No mods yet. Put a mod's folder into the mods "
+                                                                   "folder or use Add a mod folder.",
+                                                                   "Henüz mod yok. Bir modun klasörünü mods klasörüne "
+                                                                   "koyun ya da Mod klasörü ekle'yi kullanın."),
+        "base_mod": ("Your romfs_mods folder, always first", "romfs_mods klasörün, hep ilk sırada"),
+        "replaces": ("replaces files of", "şunun dosyalarını değiştirir:"),
+        "mods_master_off": ("Load mods is off in the sidebar: no mod is used.",
+                            "Kenar çubuğunda Yamalarla başlat kapalı: hiçbir mod kullanılmıyor."),
+        "play_time": ("Played", "Oynama süresi"), "sessions": ("sessions", "oturum"),
+        "update_recomp": ("Recomp update", "Recomp güncellemesi"), "update_launcher": ("Launcher update",
+                                                                                     "Launcher güncellemesi"),
+        "update_have": ("you have", "sendeki"), "release_notes": ("Release page", "Sürüm sayfası"),
+        "check_updates": ("Check for updates", "Güncellemeleri kontrol et"),
+        "check_updates_hint": ("Asks GitHub at most every six hours whether a newer recomp or launcher is out. "
+                               "Nothing is downloaded.",
+                               "En fazla altı saatte bir GitHub'a yeni recomp ya da launcher sürümü çıkıp "
+                               "çıkmadığını sorar. Hiçbir şey indirmez."),
+        "shortcut_hint": ("Adds a TotK Launcher shortcut to the desktop.", "Masaüstüne TotK Launcher kısayolu ekler."),
+        "slots": ("Save slots", "Kayıt yuvaları"), "slots_sub": ("What each slot holds, most recent first.",
+                                                               "Her yuvada ne var, en son kaydedilen en üstte."),
+        "hearts_s": ("hearts", "kalp"), "stamina_s": ("stamina", "dayanıklılık"), "battery_s": ("battery", "pil"),
+        "rupees_s": ("rupees", "rupi"), "saved_at": ("Saved", "Kaydedildi"), "layout_xbox_prompts": ("Xbox prompts", "Xbox simgeleri"),
         "saves": ("Saves", "Kayıtlar"), "achievements": ("Achievements", "Başarımlar"), "cheats": ("Cheats", "Hileler"),
         "play": ("Play", "Oyna"), "running": ("Running", "Çalışıyor"), "preparing": ("Preparing…", "Hazırlanıyor…"),
         "st_ready": ("Ready", "Hazır"), "st_running": ("Game is running", "Oyun çalışıyor"),
@@ -60,8 +90,10 @@ def strings() -> dict:
         "keyboard_mouse": ("Keyboard & mouse", "Klavye ve fare"), "mod_icons": ("Mod icons", "Mod simgeleri"),
         "no_romfs": ("RomFS not found: prompts cannot be changed", "RomFS bulunamadı: simgeler değiştirilemez"),
         "controller_layout": ("Controller layout", "Kumanda düzeni"),
-        "layout_help": ("Nintendo: buttons by position (A on the right). Xbox: the bottom button is A.",
-                        "Nintendo: düğmeler konumuna göre (sağdaki A). Xbox: alttaki düğme A."),
+        "layout_help": ("Nintendo: buttons by position (A on the right). Xbox: the bottom button is A. Xbox prompts "
+                        "(recomp 0.2.8+): buttons as Nintendo, the game's prompts show the Xbox letters.",
+                        "Nintendo: düğmeler konumuna göre (sağdaki A). Xbox: alttaki düğme A. Xbox simgeleri "
+                        "(recomp 0.2.8+): düğmeler Nintendo gibi, oyundaki simgeler Xbox harflerini gösterir."),
         "layout_auto": ("Automatic", "Otomatik"), "layout_nintendo": ("Nintendo", "Nintendo"),
         "layout_xbox": ("Xbox", "Xbox"),
         "mouse_camera": ("Mouse camera", "Fare kamerası"),
@@ -212,6 +244,8 @@ class Api:
         if paths.FOUND:
             threading.Thread(target=self._check_achievements, args=(True,), daemon=True).start()
             threading.Thread(target=self._watch, daemon=True).start()
+            if not core.game_running() and core.count_session(self._cfg):
+                core.save_config(self._cfg)
 
     # -- general
     def log(self, message):
@@ -228,7 +262,9 @@ class Api:
         return {"found": paths.FOUND, "lang": self._cfg["lang"], "langs": i18n.LANGS, "strings": strings(),
                 "start_page": page,
                 "root": str(ROOT), "cfg": {k: self._cfg[k] for k in ("mods", "prompts", "backup_before_play",
-                                                                   "backup_keep", "close_on_play", "theme")}}
+                                                                   "backup_keep", "close_on_play", "theme",
+                                                                   "check_updates")},
+                "version": core.VERSION}
 
     def set_lang(self, code):
         self._set_cfg("lang", code)
@@ -236,7 +272,8 @@ class Api:
         return self.boot()
 
     def set_option(self, key, value):
-        if key in ("mods", "prompts", "backup_before_play", "backup_keep", "close_on_play", "theme"):
+        if key in ("mods", "prompts", "backup_before_play", "backup_keep", "close_on_play", "theme",
+                   "check_updates"):
             self._set_cfg(key, value)
         return True
 
@@ -265,6 +302,9 @@ class Api:
                 if self._running and not on:
                     self._was_running = True
                     threading.Thread(target=self._check_achievements, daemon=True).start()
+                    time.sleep(1.5)   # the game writes its last log lines while it closes
+                    if core.count_session(self._cfg):
+                        core.save_config(self._cfg)
                 self._running = on
             time.sleep(2.5)
 
@@ -279,8 +319,51 @@ class Api:
             "exe": core.EXE.exists(), "version": core.installed_version(),
             "gpu": core.log_fact(r"vk: using gpu \d+: (.+)"), "mods": len(mods), "mods_on": self._cfg["mods"],
             "patches": len(patches), "last": last_start(), "session": last_session(),
-            "fps": core.read_ini().get("fps_limit", "60"), "log": "\n".join(core.log_lines(80)),
+            "fps": core.read_ini().get("fps_limit", "60"), "play": self._cfg.get("play", {}),
         }
+
+    def recent_log(self):
+        return "\n".join(core.log_lines(80))
+
+    def updates(self):
+        """Newer recomp and launcher releases (cached for six hours); {} when the check is turned off."""
+        if not self._cfg.get("check_updates", True):
+            return {}
+        before = (self._cfg.get("update_cache") or {}).get("time")
+        out = core.check_updates(self._cfg)
+        if self._cfg["update_cache"].get("time") != before:
+            core.save_config(self._cfg)
+        return out
+
+    def open_url(self, url):
+        if str(url).startswith("https://github.com/"):
+            os.startfile(url)
+        return True
+
+    # -- mods
+    def mods(self):
+        return {"items": core.mod_list(self._cfg), "on": self._cfg["mods"], "folder": str(core.LIBRARY)}
+
+    def set_mod(self, name, on):
+        off = [n for n in self._cfg.get("mods_off", []) if n != name]
+        if not on:
+            off.append(name)
+        self._set_cfg("mods_off", off)
+        return self.mods()
+
+    def add_mod(self):
+        import webview
+        res = self._window.create_file_dialog(webview.FileDialog.FOLDER)
+        if not res:
+            return {"ok": False}
+        folder = Path(res[0] if isinstance(res, (list, tuple)) else res)
+        if folder.resolve() in (core.MODS.resolve(), core.LIBRARY.resolve()) or core.LIBRARY.resolve() in folder.resolve().parents:
+            return {"ok": False, "message": t("That folder is already used by the launcher.",
+                                              "Bu klasör zaten launcher tarafından kullanılıyor.")}
+        if not core.mod_files(folder):
+            return {"ok": False, "message": t("That folder has no files.", "Bu klasörde dosya yok.")}
+        name = core.add_mod(folder)
+        return {"ok": True, "message": t(f"Added: {name}", f"Eklendi: {name}")}
 
     def quick_fps(self, value):
         changes = {"fps_limit": value}
@@ -401,8 +484,14 @@ class Api:
 
     # -- saves
     def saves(self):
+        fmt = t("%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M")
+        slots = []
+        for slot in core.save_slots():
+            d = core.slot_summary(slot)
+            d["time"] = time.strftime(fmt, time.localtime(d["time"]))
+            slots.append(d)
         return {"backups": [{"name": b.name, "size": round(core.dir_size(b) / 1048576, 1)}
-                            for b in core.list_backups()[:40]]}
+                            for b in core.list_backups()[:40]], "slots": slots}
 
     def backup_now(self):
         d = core.backup_saves("manual", 0)
@@ -428,7 +517,8 @@ class Api:
         return {"ok": True}
 
     def open_folder(self, which):
-        folder = {"logs": core.LOGS, "game": ROOT, "saves": core.SAVE, "backups": core.SAVE_BACKUPS}[which]
+        folder = {"logs": core.LOGS, "game": ROOT, "saves": core.SAVE, "backups": core.SAVE_BACKUPS,
+                  "mods": core.LIBRARY}[which]
         folder.mkdir(parents=True, exist_ok=True)
         os.startfile(folder)
 
@@ -478,7 +568,7 @@ class Api:
             value = None if best is None else min(best.get(stat, 0), target)
             items.append({"id": aid, "cat": cat, "icon": icon, "title": t(*title), "desc": t(*desc),
                           "target": target, "value": value, "unlocked": unlocked.get(aid)})
-        return {"items": items, "loaded": best is not None,
+        return {"items": items, "loaded": best is not None, "play": self._cfg.get("play", {}),
                 "categories": [[c, t(*n)] for c, n in achievements.CATEGORIES]}
 
     # -- cheats

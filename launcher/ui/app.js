@@ -62,8 +62,8 @@ const select = (options, current, attrs = "") =>
   `<select ${attrs}>${options.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(current) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
 const segmented = (options, current, cls = "segmented", attrs = "") =>
   `<div class="${cls}" ${attrs}>${options.map(([v, l]) => `<button type="button" data-v="${esc(v)}" class="${v === current ? "active" : ""}">${esc(l)}</button>`).join("")}</div>`;
-const range = (id, lo, hi, value, suffix = "") =>
-  `<div class="range-control"><input type="range" id="${id}" min="${lo}" max="${hi}" value="${esc(value)}" data-suffix="${suffix}"><output>${esc(value)}${suffix}</output></div>`;
+const range = (id, lo, hi, value, suffix = "", step = 1) =>
+  `<div class="range-control"><input type="range" id="${id}" min="${lo}" max="${hi}" step="${step}" value="${esc(value)}" data-suffix="${suffix}"><output>${esc(value)}${suffix}</output></div>`;
 
 function bindSegmented(root, onPick) {
   $$("button", root).forEach((b) => b.addEventListener("click", () => {
@@ -115,15 +115,18 @@ function applyTheme() {
 }
 
 // ------------------------------------------------------------------ shell
-const PAGES_ORDER = ["home", "settings", "controls", "saves", "achievements", "cheats"];
+const PAGES_ORDER = ["home", "settings", "controls", "mods", "saves", "achievements", "cheats"];
+const pageName = (p) => (p === "mods" ? S.mods_page : S[p]);
+const FPS = () => [["30", "30"], ["60", "60"], ["120", "120"], ["144", "144"], ["display", S.monitor]];
 
 function renderShell() {
   document.documentElement.lang = BOOT.lang;
   $("#root").innerHTML = `<div class="app-shell">
     <aside class="sidebar">
       <div class="brand"><img src="img/icon.png" alt=""><div class="wordmark">TotK Launcher<span>Tears of the Kingdom</span></div></div>
-      <nav>${PAGES_ORDER.map((p) => `<button type="button" data-page="${p}"><span>${esc(S[p])}</span>${p === "achievements" ? '<i id="achcount" class="hidden"></i>' : ""}</button>`).join("")}</nav>
+      <nav>${PAGES_ORDER.map((p) => `<button type="button" data-page="${p}"><span>${esc(pageName(p))}</span>${p === "achievements" ? '<i id="achcount" class="hidden"></i>' : ""}</button>`).join("")}</nav>
       <div class="sidebar-bottom">
+        <div class="side-block"><label>${esc(S.quick_fps)}</label>${segmented(FPS(), "", "segmented", 'id="sidefps"')}</div>
         <div class="mod-toggle"><div><strong>${esc(S.load_mods)}</strong><span>romfs_mods</span></div>${toggle(BOOT.cfg.mods, 'id="mods"')}</div>
         <div class="play-panel"><button type="button" class="play-button" data-play></button><span class="playstate"><i></i><em></em></span></div>
       </div>
@@ -139,8 +142,10 @@ function renderShell() {
   $("#mods").addEventListener("toggle", async (e) => {
     BOOT.cfg.mods = e.detail;
     await api().set_option("mods", e.detail);
-    if (PAGE === "home" || PAGE === "controls") go(PAGE, true);
+    if (["home", "controls", "mods"].includes(PAGE)) go(PAGE, true);
   });
+  bindSegmented($("#sidefps"), async (v) => { await api().quick_fps(v); toast(`${S.quick_fps}: ${v === "display" ? S.monitor : v}`); });
+  api().home().then((d) => $$("#sidefps button").forEach((b) => b.classList.toggle("active", b.dataset.v === d.fps)));
   showState(STATE);
   achCount();
 }
@@ -190,7 +195,7 @@ async function go(page, keepScroll = false) {
   PAGE = page;
   CAPTURE = null;
   $$("nav button").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
-  $("#pagename").textContent = S[page];
+  $("#pagename").textContent = pageName(page);
   $("#main").classList.toggle("home", page === "home");
   $(".app-shell").classList.toggle("on-home", page === "home");
   const main = $("#main");
@@ -215,14 +220,11 @@ function duration(sec) {
   return `${Math.floor(m / 60)} ${tr ? "sa" : "h"} ${m % 60} ${tr ? "dk" : "min"}`;
 }
 
+const played = (play) => (play && play.seconds > 0
+  ? `${duration(play.seconds)} · ${num(play.sessions)} ${S.sessions}` : "");
+
 PAGES.home = async () => {
   const d = await api().home();
-  const fps = [["30", "30"], ["60", "60"], ["120", "120"], ["144", "144"], ["display", S.monitor]];
-  const logHtml = (d.log || S.no_log).split("\n").map((line) => {
-    if (/ready|started|success/i.test(line)) return `<span class="log-ok">${esc(line)}</span>`;
-    const m = /^(\[[^\]]*\])(.*)$/.exec(line);
-    return m ? `<span class="log-muted">${esc(m[1])}</span>${esc(m[2])}` : esc(line);
-  }).join("\n");
   const facts = [
     d.exe ? `<span class="ok">totk.exe ✓</span>` : `<span class="bad">totk.exe ${esc(S.not_found)}</span>`,
     `<span>${esc(d.version)}</span>`,
@@ -234,31 +236,24 @@ PAGES.home = async () => {
   const session = ss ? `<p class="session"><b>${esc(S.last_session)}</b> · ${esc(d.last)} · ${duration(ss.seconds)}, ${num(ss.frames)} ${esc(S.frames)}
       · ${esc(S.avg_fps)} <em>${num(ss.mean, 1)} FPS</em> · ${esc(S.low_fps)} ${num(ss.low, 1)} FPS</p>`
     : `<p class="session">${esc(S.last_start)}: ${esc(d.last || "—")}</p>`;
+  const total = played(d.play);
   return {
     html: `<h1 class="home-title">${esc(S.game_title)}</h1>
       <div class="facts">${facts}</div>
       ${session}
-      ${section(S.quick_fps, S.fps_applied, segmented(fps, d.fps, "segmented fps", 'id="fps"'))}
-      <section class="section log-section">
-        <button type="button" class="section-toggle" id="logtoggle"><div><h2>${esc(S.recent_log)}</h2><p>${esc(S.log_sub)}</p></div><span class="${LOG_OPEN ? "rotate" : ""}">${icon("chevron")}</span></button>
-        <div id="logbody" class="${LOG_OPEN ? "" : "hidden"}"><div class="log-box" id="log"><code>${logHtml}</code></div>
-          <div class="button-row">${button(S.refresh, { attrs: 'id="refresh"' })}${button(S.log_folder, { attrs: 'data-open="logs"' })}${button(S.game_folder_btn, { attrs: 'data-open="game"' })}${button(S.shortcut, { variant: "ghost", attrs: 'id="shortcut"' })}</div></div>
-      </section>
+      ${total ? `<p class="session"><b>${esc(S.play_time)}</b> · ${esc(total)}</p>` : ""}
+      <div class="updates" id="updates"></div>
       <div class="launch"><span class="playstate"><i></i><em></em></span><button type="button" class="play-button" data-play></button></div>`,
     after(p) {
       $$("[data-play]", p).forEach((b) => b.addEventListener("click", play));
       showState(STATE);
-      const log = $("#log", p); log.scrollTop = log.scrollHeight;
-      bindSegmented($("#fps", p), async (v) => { await api().quick_fps(v); toast(`${S.quick_fps}: ${v === "display" ? S.monitor : v}`); });
-      $("#logtoggle", p).addEventListener("click", (e) => {
-        LOG_OPEN = !LOG_OPEN;
-        $("span", e.currentTarget).classList.toggle("rotate", LOG_OPEN);
-        $("#logbody", p).classList.toggle("hidden", !LOG_OPEN);
-        if (LOG_OPEN) log.scrollTop = log.scrollHeight;
-      });
-      $("#refresh", p).addEventListener("click", () => go("home", true));
-      $$("[data-open]", p).forEach((b) => b.addEventListener("click", () => api().open_folder(b.dataset.open)));
-      $("#shortcut", p).addEventListener("click", async () => toast((await api().shortcut()).message));
+      api().updates().then((u) => {
+        const box = $("#updates", p); if (!box || !u) return;
+        box.innerHTML = [["recomp", S.update_recomp], ["launcher", S.update_launcher]].filter(([k]) => u[k]).map(([k, label]) =>
+          `<div class="update-note"><b>${esc(label)}: ${esc(u[k].tag)}</b><span>${esc(S.update_have)} ${esc(u[k].have)}</span>
+            <a class="link" data-url="${esc(u[k].url)}">${esc(S.release_notes)}</a></div>`).join("");
+        $$("[data-url]", box).forEach((a) => a.addEventListener("click", () => api().open_url(a.dataset.url)));
+      }).catch(() => {});
     },
   };
 };
@@ -271,7 +266,7 @@ PAGES.settings = async () => {
   const control = (it) => {
     const id = `s_${it.key}`;
     if (it.kind === "bool") return toggle(!["", "0", "false", "off"].includes(String(it.value)), `id="${id}"`);
-    if (it.kind === "scale") return range(id, it.choices[0], it.choices[1], it.value, it.key === "volume" ? "%" : "");
+    if (it.kind === "scale") return range(id, it.choices[0], it.choices[1], it.value, "", it.choices[2] || 1);
     if (it.kind === "gpu") return select([["", S.automatic], ...d.gpus.map(([i, n]) => [i, `${i}: ${n}`])], it.value, `id="${id}"`);
     if (it.kind === "combo") return `<input type="text" class="combo" id="${id}" list="${id}_l" value="${esc(it.value)}"><datalist id="${id}_l">${it.choices.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>`;
     const choices = it.choices.includes(it.value) ? it.choices : [it.value, ...it.choices];
@@ -281,8 +276,15 @@ PAGES.settings = async () => {
     html: `${pageHeader(S.settings, S.settings_sub)}
       ${section(S.launcher, "", field(S.ui_lang, S.lang_hint, select(BOOT.langs, BOOT.lang, 'id="lang"'))
         + field(S.theme, S.theme_help, select([["light", S.theme_light], ["night", S.theme_night]], BOOT.cfg.theme, 'id="theme"'))
-        + field(S.game_folder, S.folder_hint, `<div class="inline-control"><input value="${esc(BOOT.root)}" readonly>${button(S.change, { attrs: 'id="chgame"' })}</div>`))}
+        + field(S.game_folder, S.folder_hint, `<div class="inline-control"><input value="${esc(BOOT.root)}" readonly>${button(S.change, { attrs: 'id="chgame"' })}</div>`)
+        + field(S.check_updates, S.check_updates_hint, toggle(BOOT.cfg.check_updates, 'id="checkupd"'))
+        + field(S.shortcut, S.shortcut_hint, button(S.shortcut, { attrs: 'id="shortcut"' })))}
       ${d.groups.map((g) => section(sentence(g.title), "", g.items.map((it) => field(it.label, it.help, control(it))).join(""))).join("")}
+      <section class="section log-section">
+        <button type="button" class="section-toggle" id="logtoggle"><div><h2>${esc(S.recent_log)}</h2><p>${esc(S.log_sub)}</p></div><span class="${LOG_OPEN ? "rotate" : ""}">${icon("chevron")}</span></button>
+        <div id="logbody" class="${LOG_OPEN ? "" : "hidden"}"><div class="log-box" id="log"><code></code></div>
+          <div class="button-row">${button(S.refresh, { attrs: 'id="refresh"' })}${button(S.log_folder, { attrs: 'data-open="logs"' })}${button(S.game_folder_btn, { attrs: 'data-open="game"' })}</div></div>
+      </section>
       <div class="sticky-actions"><span>${esc(S.backup_note)}</span><div>
         ${button(S.open_ini, { variant: "ghost", attrs: 'id="openini"' })}${button(S.reset_defaults, { attrs: 'id="reset"' })}${button(S.save_settings, { variant: "primary", attrs: 'id="save"' })}</div></div>`,
     after(p) {
@@ -290,6 +292,27 @@ PAGES.settings = async () => {
       $("#theme", p).addEventListener("change", async (e) => { BOOT.cfg.theme = e.target.value; await api().set_option("theme", e.target.value); applyTheme(); });
       $("#chgame", p).addEventListener("click", async () => { const r = await api().choose_game(); if (r.message) toast(r.message); });
       $("#openini", p).addEventListener("click", () => api().open_ini());
+      $("#checkupd", p).addEventListener("toggle", (e) => { BOOT.cfg.check_updates = e.detail; api().set_option("check_updates", e.detail); });
+      $("#shortcut", p).addEventListener("click", async () => toast((await api().shortcut()).message));
+      const loadLog = async () => {
+        const text = (await api().recent_log()) || S.no_log, log = $("#log", p);
+        if (!log) return;
+        $("code", log).innerHTML = text.split("\n").map((line) => {
+          if (/ready|started|success/i.test(line)) return `<span class="log-ok">${esc(line)}</span>`;
+          const m = /^(\[[^\]]*\])(.*)$/.exec(line);
+          return m ? `<span class="log-muted">${esc(m[1])}</span>${esc(m[2])}` : esc(line);
+        }).join("\n");
+        log.scrollTop = log.scrollHeight;
+      };
+      if (LOG_OPEN) loadLog();
+      $("#logtoggle", p).addEventListener("click", (e) => {
+        LOG_OPEN = !LOG_OPEN;
+        $("span", e.currentTarget).classList.toggle("rotate", LOG_OPEN);
+        $("#logbody", p).classList.toggle("hidden", !LOG_OPEN);
+        if (LOG_OPEN) loadLog();
+      });
+      $("#refresh", p).addEventListener("click", loadLog);
+      $$("[data-open]", p).forEach((b) => b.addEventListener("click", () => api().open_folder(b.dataset.open)));
       $("#save", p).addEventListener("click", async () => {
         const values = {};
         d.groups.forEach((g) => g.items.forEach((it) => {
@@ -397,7 +420,7 @@ PAGES.controls = async () => {
       ${section(S.button_prompts, S.prompts_sub, `<div class="prompt-row">${segmented(sets, prompt, "segmented", 'id="pset"')}
         ${d.available ? "" : `<div class="prompt-note">${esc(S.no_romfs)}</div>`}
         <div class="prompt-strip" id="preview"></div></div>`)}
-      ${section(S.input, "", field(S.controller_layout, S.layout_help, select([["auto", S.layout_auto], ["nintendo", S.layout_nintendo], ["xbox", S.layout_xbox]], d.pad_layout, 'id="layout"'))
+      ${section(S.input, "", field(S.controller_layout, S.layout_help, select([["auto", S.layout_auto], ["nintendo", S.layout_nintendo], ["xbox", S.layout_xbox], ["xbox_prompts", S.layout_xbox_prompts]], d.pad_layout, 'id="layout"'))
         + field(S.mouse_camera, S.mouse_help, range("sens", 0, 10, d.mouse_sens)))}
       ${section(S.key_bindings, S.bind_help, `<div class="binding-table"><div class="binding-head"><span>${esc(S.action)}</span><span>${esc(S.key1)}</span><span>${esc(S.key2)}</span><span>${esc(S.controller)}</span></div>${rows}</div>`)}
       <div class="sticky-actions"><span>${d.buttons.length} ${esc(S.actions_n)}</span><div>
@@ -432,6 +455,26 @@ PAGES.controls = async () => {
   };
 };
 
+PAGES.mods = async () => {
+  const d = await api().mods();
+  const row = (m) => `<div class="mod-row ${m.on && d.on ? "" : "off"}"><div><strong>${esc(m.name)}</strong>
+      <span>${m.files} ${esc(S.files)} · ${m.size} MiB${m.base ? " · " + esc(S.base_mod) : ""}</span>
+      ${m.overrides.length ? `<span class="over">${esc(S.replaces)} ${esc(m.overrides.join(", "))}</span>` : ""}</div>
+    ${m.base ? `<em>${esc(d.on ? S.on : S.off)}</em>` : toggle(m.on, `data-mod="${esc(m.name)}"`)}</div>`;
+  const others = d.items.filter((m) => !m.base);
+  return {
+    html: `${pageHeader(S.mods_page, S.mods_sub)}
+      ${d.on ? "" : `<div class="notice warning"><div><strong>${esc(S.mods_master_off)}</strong></div></div>`}
+      ${section(S.mod_list, d.folder, d.items.map(row).join("") + (others.length ? "" : `<div class="empty-note">${esc(S.no_mods)}</div>`)
+        + `<div class="button-row padded">${button(S.add_mod, { variant: "primary", attrs: 'id="addmod"' })}${button(S.mods_folder, { attrs: 'data-open="mods"' })}</div>`)}`,
+    after(p) {
+      $$("[data-mod]", p).forEach((t) => t.addEventListener("toggle", async (e) => { await api().set_mod(t.dataset.mod, e.detail); go("mods", true); }));
+      $("#addmod", p).addEventListener("click", async () => { const r = await api().add_mod(); if (r.message) toast(r.message); if (r.ok) go("mods", true); });
+      $$("[data-open]", p).forEach((b) => b.addEventListener("click", () => api().open_folder(b.dataset.open)));
+    },
+  };
+};
+
 PAGES.saves = async () => {
   const d = await api().saves();
   const c = BOOT.cfg;
@@ -446,6 +489,12 @@ PAGES.saves = async () => {
     : `<div class="empty-note">${esc(S.no_backups)}</div>`;
   return {
     html: `${pageHeader(S.saves, S.saves_sub)}
+      ${d.slots.length ? section(S.slots, S.slots_sub, `<div class="slot-table">
+        <div class="head"></div><div class="head">${esc(S.saved_at)}</div><div class="head">${esc(S.hearts_s)}</div>
+        <div class="head">${esc(S.stamina_s)}</div><div class="head">${esc(S.battery_s)}</div><div class="head">${esc(S.rupees_s)}</div>
+        ${d.slots.map((x) => `<div class="name">${esc(x.name)}</div><div>${esc(x.time)}</div><div>${x.hearts ?? "—"}</div>
+          <div>${x.stamina == null ? "—" : num(x.stamina, x.stamina % 1 ? 1 : 0)}</div><div>${x.battery ?? "—"}</div><div>${x.rupee == null ? "—" : num(x.rupee)}</div>`).join("")}
+      </div>`) : ""}
       ${section(S.auto_backup, "", field(S.backup_on_play, S.backup_on_play_hint, toggle(c.backup_before_play, 'id="bop"'))
         + field(S.keep, S.keep_hint, `<input class="number-input" type="number" id="keep" min="1" max="100" value="${c.backup_keep}">`)
         + field(S.close_on_play, S.close_hint, toggle(c.close_on_play, 'id="cop"'))
@@ -484,7 +533,8 @@ PAGES.achievements = async () => {
   return {
     html: `${pageHeader(S.achievements, S.ach_sub)}
       <div class="achievement-summary"><div class="progress-ring"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19"/><circle class="ring-value" cx="22" cy="22" r="19" pathLength="100" stroke-dasharray="${pct} 100"/></svg><strong>${pct}%</strong></div>
-        <div><span>${esc(S.overall)}</span><h2>${done} <small>/ ${total}</small></h2><div class="wide-progress"><i style="width:${pct}%"></i></div></div>
+        <div><span>${esc(S.overall)}</span><h2>${done} <small>/ ${total}</small></h2><div class="wide-progress"><i style="width:${pct}%"></i></div>
+          ${played(d.play) ? `<div class="played">${esc(S.play_time)}: ${esc(played(d.play))}</div>` : ""}</div>
         ${button(S.check_now, { attrs: 'id="check"' })}</div>
       <div class="filter-bar" id="filter">${[["all", S.all], ...d.categories, ["locked", S.locked]].map(([v, l]) => `<button type="button" data-v="${v}" class="${v === ACH_FILTER ? "active" : ""}">${esc(l)}</button>`).join("")}</div>
       <div class="achievement-grid">${shown.map(card).join("")}</div>
